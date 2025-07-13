@@ -12,6 +12,26 @@
 "settings" = "Configuración";
 "generation_preview" = "Rango: %d números × %d repeticiones = %d números totales";
 "generation_preview_with_winners" = "Rango: %d números × %d repeticiones = %d números totales, %d ganadores";
+"game_mode" = "Modo de Juego";
+"select_game_mode" = "Seleccionar Modo de Juego";
+
+/* Player Entry */
+"player_registration" = "Registro de Jugadores";
+"add_players" = "Agregar Jugadores";
+"registered_players" = "Jugadores Registrados";
+"first_name_placeholder" = "Nombre";
+"entry_price" = "Precio de Entrada";
+"max_players" = "Máximo Jugadores";
+"start_game" = "Iniciar Juego";
+"no_players_yet" = "Aún no hay jugadores registrados.\nAgrega jugadores para comenzar.";
+"player_number" = "Jugador N°";
+"please_enter_player_name" = "Por favor ingresa el nombre del jugador";
+"max_players_reached" = "Se alcanzó el máximo de jugadores";
+"minimum_players_required" = "Se requieren al menos 2 jugadores";
+"invalid_player_name" = "Nombre de jugador inválido";
+"failed_to_save_player" = "Error al guardar jugador";
+"players_summary" = "%d jugadores: %@";
+"game_mode_summary" = "%@ | %@ | Premio: %@";
 
 /* Result Screen */
 "next" = "Siguiente";
@@ -21,19 +41,165 @@
 "number_x_of_y" = "Número %d de %d";
 "auto_advance_info" = "Avance automático cada 3 segundos";
 "winning_numbers" = "Números que Alcanzaron la Meta";
+"winner_player" = "Jugador Ganador";
+"winner_players" = "Jugadores Ganadores";
 
 /* Settings Screen */
 "voice_enabled" = "Voz Activada";
 "reset_background" = "Restablecer Fondo";
 "background_reset" = "Fondo Restablecido";
+"admin_mode" = "Modo Administrador";
+"admin_dashboard" = "Panel Administrativo";
+
+/* Admin Authentication */
+"admin_auth_reason" = "Autenticación requerida para acceder al panel administrativo";
+"biometry_not_available" = "Biometría no disponible";
+"biometry_not_enrolled" = "Biometría no configurada";
+"biometry_lockout" = "Biometría bloqueada";
+"passcode_not_set" = "Código de acceso no configurado";
+"authentication_failed" = "Autenticación fallida";
+"user_cancelled" = "Usuario canceló la autenticación";
+"too_many_attempts" = "Demasiados intentos fallidos";
+"system_cancelled" = "Sistema canceló la autenticación";
+"user_fallback" = "Usuario eligió código de acceso";
+"invalid_credentials" = "Credenciales inválidas";
+"account_locked" = "Cuenta bloqueada";
+"enter_admin_pin" = "Ingresa PIN de Administrador";
+"admin_pin_setup" = "Configurar PIN de Administrador";
+"invalid_pin_attempts_remaining" = "PIN incorrecto. %d intentos restantes.";
+"account_locked_message" = "Cuenta bloqueada por %d minutos debido a muchos intentos fallidos.";
+"security_level_biometry_and_pin" = "%@ y PIN de 6 dígitos";
+"security_level_biometry_only" = "Solo %@";
+"security_level_pin_only" = "Solo PIN de 6 dígitos";
+"security_level_none" = "Sin seguridad configurada";
+
+/* Admin Dashboard */
+"dashboard" = "Panel Principal";
+"game_history" = "Historial de Juegos";
+"game_modes" = "Modos de Juego";
+"total_games" = "Juegos Totales";
+"total_profit" = "Ganancia Total";
+"total_payout" = "Pago Total";
+"unique_players" = "Jugadores Únicos";
+"repeat_rate" = "Tasa de Repetición";
+"average_profit" = "Ganancia Promedio";
+"profit_margin" = "Margen de Ganancia";
+"most_popular_mode" = "Modo Más Popular";
+"revenue_summary" = "Resumen de Ingresos";
+"player_analytics" = "Análisis de Jugadores";
+
+/* Time Filters */
+"day" = "Día";
+"week" = "Semana";
+"month" = "Mes";
+"year" = "Año";
+"custom" = "Personalizado";
+"filter_by" = "Filtrar por";
+"from_date" = "Fecha Inicial";
+"to_date" = "Fecha Final";
+
+/* Game Modes Management */
+"add_game_mode" = "Agregar Modo de Juego";
+"edit_game_mode" = "Editar Modo de Juego";
+"mode_title" = "Título del Modo";
+"max_players_mode" = "Jugadores Máximos";
+"entry_price_soles" = "Precio Entrada (S/.)";
+"prize_pool_soles" = "Premio Total (S/.)";
+"profit_percentage" = "Porcentaje de Ganancia";
+"save_mode" = "Guardar Modo";
+"cancel" = "Cancelar";
+"delete_mode" = "Eliminar Modo";
+"mode_deleted" = "Modo eliminado";
+"mode_saved" = "Modo guardado";
+"invalid_mode_data" = "Datos del modo inválidos";
+"auto_generate_title" = "Generar Título Automático";
+
+/* Game History */
+"session_date" = "Fecha de Sesión";
+"session_players" = "Jugadores";
+"session_profit" = "Ganancia";
+"session_mode" = "Modo";
+"session_winners" = "Ganadores";
+"delete_session" = "Eliminar Sesión";
+"session_deleted" = "Sesión eliminada";
+"no_sessions_found" = "No se encontraron sesiones";
+"session_details" = "Detalles de Sesión";
+"gross_income" = "Ingresos Brutos";
+"net_profit" = "Ganancia Neta";
+"players_participated" = "Jugadores Participaron";
+"winning_numbers_session" = "Números Ganadores";
 
 /* Error Messages */
 "invalid_input" = "Entrada Inválida";
 "start_must_be_less_than_end" = "El número inicial debe ser menor que el final";
 "repetitions_must_be_positive" = "Las repeticiones deben ser un número positivo";
 "please_fill_all_fields" = "Por favor, complete todos los campos";
+"network_error" = "Error de red";
+"cloudkit_error" = "Error de sincronización";
+"data_save_error" = "Error al guardar datos";
+"data_load_error" = "Error al cargar datos";
+"icloud_not_available" = "iCloud no disponible";
+"please_sign_in_icloud" = "Por favor inicia sesión en iCloud";
+
+/* General Actions */
+"done" = "Hecho";
+"ok" = "OK";
+"yes" = "Sí";
+"no" = "No";
+"edit" = "Editar";
+"delete" = "Eliminar";
+"save" = "Guardar";
+"add" = "Agregar";
+"remove" = "Eliminar";
+"close" = "Cerrar";
+"refresh" = "Actualizar";
+"loading" = "Cargando...";
+"error" = "Error";
+"success" = "Éxito";
+"warning" = "Advertencia";
+"info" = "Información";
 
 /* Accessibility */
 "gold_coin" = "Moneda de Oro";
 "random_number" = "Número Aleatorio";
-"confetti_animation" = "Animación de Confeti"; 
+"confetti_animation" = "Animación de Confeti";
+"settings_button" = "Botón de Configuración";
+"back_button" = "Botón de Regreso";
+"add_player_button" = "Botón Agregar Jugador";
+"start_game_button" = "Botón Iniciar Juego";
+"admin_unlock_button" = "Botón Desbloquear Administrador";
+
+/* Financial */
+"soles_currency" = "S/.";
+"profit_calculation" = "Cálculo de Ganancia";
+"revenue_calculation" = "Cálculo de Ingresos";
+"payout_calculation" = "Cálculo de Pago";
+"financial_summary" = "Resumen Financiero";
+"cost_per_player" = "Costo por Jugador";
+"total_revenue" = "Ingresos Totales";
+"expected_profit" = "Ganancia Esperada";
+"actual_payout" = "Pago Real";
+
+/* Statistics */
+"statistics" = "Estadísticas";
+"analytics" = "Análisis";
+"performance" = "Rendimiento";
+"trends" = "Tendencias";
+"summary" = "Resumen";
+"details" = "Detalles";
+"overview" = "Visión General";
+"insights" = "Perspectivas";
+"metrics" = "Métricas";
+"kpis" = "Indicadores Clave";
+
+/* Admin Panel Navigation */
+"admin_panel" = "Panel Administrativo";
+"logout" = "Cerrar Sesión";
+"profile" = "Perfil";
+"security" = "Seguridad";
+"data_management" = "Gestión de Datos";
+"reports" = "Reportes";
+"export_data" = "Exportar Datos";
+"import_data" = "Importar Datos";
+"backup" = "Respaldo";
+"restore" = "Restaurar"; 
