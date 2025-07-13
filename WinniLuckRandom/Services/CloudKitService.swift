@@ -1,0 +1,386 @@
+//
+//  CloudKitService.swift
+//  WinniLuckRandom
+//
+//  Created by Ehab Fayez on 12/07/25.
+//
+
+import Foundation
+import CloudKit
+import SwiftUI
+
+@MainActor
+class CloudKitService: ObservableObject {
+    static let shared = CloudKitService()
+    
+    private let container = CKContainer.default()
+    private var database: CKDatabase {
+        container.privateCloudDatabase
+    }
+    
+    // MARK: - Published Properties
+    @Published var isOnline = false
+    @Published var isInitialized = false
+    @Published var errorMessage: String?
+    
+    // MARK: - Cached Data
+    @Published var players: [Player] = []
+    @Published var gameModes: [GameMode] = []
+    @Published var gameSessions: [GameSession] = []
+    
+    // MARK: - Initialization
+    init() {
+        checkAccountStatus()
+        setupNotifications()
+    }
+    
+    // MARK: - Account Status
+    private func checkAccountStatus() {
+        Task {
+            do {
+                let accountStatus = try await container.accountStatus()
+                await MainActor.run {
+                    switch accountStatus {
+                    case .available:
+                        isOnline = true
+                        initializeData()
+                    case .noAccount:
+                        errorMessage = "Please sign in to iCloud in Settings"
+                        isOnline = false
+                    case .restricted:
+                        errorMessage = "iCloud account is restricted"
+                        isOnline = false
+                    case .couldNotDetermine:
+                        errorMessage = "Could not determine iCloud account status"
+                        isOnline = false
+                    case .temporarilyUnavailable:
+                        errorMessage = "iCloud is temporarily unavailable"
+                        isOnline = false
+                    @unknown default:
+                        errorMessage = "Unknown iCloud account status"
+                        isOnline = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Error checking iCloud account: \(error.localizedDescription)"
+                    isOnline = false
+                }
+            }
+        }
+    }
+    
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(accountChanged),
+            name: .CKAccountChanged,
+            object: nil
+        )
+    }
+    
+    @objc private func accountChanged() {
+        checkAccountStatus()
+    }
+    
+    // MARK: - Data Initialization
+    private func initializeData() {
+        Task {
+            await loadAllData()
+            await MainActor.run {
+                isInitialized = true
+                
+                // Create default game modes if none exist
+                if gameModes.isEmpty {
+                    createDefaultGameModes()
+                }
+            }
+        }
+    }
+    
+    private func loadAllData() async {
+        async let playersResult = fetchPlayers()
+        async let gameModesResult = fetchGameModes()
+        async let gameSessionsResult = fetchGameSessions()
+        
+        await MainActor.run {
+            players = playersResult
+            gameModes = gameModesResult
+            gameSessions = gameSessionsResult
+        }
+    }
+    
+    // MARK: - Player Operations
+    func fetchPlayers() async -> [Player] {
+        guard isOnline else { return [] }
+        
+        do {
+            let query = CKQuery(recordType: "Player", predicate: NSPredicate(value: true))
+            let result = try await database.records(matching: query)
+            
+            return result.matchResults.compactMap { _, result in
+                switch result {
+                case .success(let record):
+                    return Player(from: record)
+                case .failure(let error):
+                    print("Error fetching player record: \(error)")
+                    return nil
+                }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error fetching players: \(error.localizedDescription)"
+            }
+            return []
+        }
+    }
+    
+    func savePlayer(_ player: Player) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let record = player.toCKRecord()
+            _ = try await database.save(record)
+            
+            await MainActor.run {
+                if let index = players.firstIndex(where: { $0.id == player.id }) {
+                    players[index] = player
+                } else {
+                    players.append(player)
+                }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error saving player: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    func deletePlayer(_ player: Player) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let recordID = CKRecord.ID(recordName: player.id.uuidString)
+            _ = try await database.deleteRecord(withID: recordID)
+            
+            await MainActor.run {
+                players.removeAll { $0.id == player.id }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error deleting player: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    // MARK: - GameMode Operations
+    func fetchGameModes() async -> [GameMode] {
+        guard isOnline else { return [] }
+        
+        do {
+            let query = CKQuery(recordType: "GameMode", predicate: NSPredicate(value: true))
+            let result = try await database.records(matching: query)
+            
+            return result.matchResults.compactMap { _, result in
+                switch result {
+                case .success(let record):
+                    return GameMode(from: record)
+                case .failure(let error):
+                    print("Error fetching game mode record: \(error)")
+                    return nil
+                }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error fetching game modes: \(error.localizedDescription)"
+            }
+            return []
+        }
+    }
+    
+    func saveGameMode(_ gameMode: GameMode) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let record = gameMode.toCKRecord()
+            _ = try await database.save(record)
+            
+            await MainActor.run {
+                if let index = gameModes.firstIndex(where: { $0.id == gameMode.id }) {
+                    gameModes[index] = gameMode
+                } else {
+                    gameModes.append(gameMode)
+                }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error saving game mode: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    func deleteGameMode(_ gameMode: GameMode) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let recordID = CKRecord.ID(recordName: gameMode.id.uuidString)
+            _ = try await database.deleteRecord(withID: recordID)
+            
+            await MainActor.run {
+                gameModes.removeAll { $0.id == gameMode.id }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error deleting game mode: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    // MARK: - GameSession Operations
+    func fetchGameSessions() async -> [GameSession] {
+        guard isOnline else { return [] }
+        
+        do {
+            let query = CKQuery(recordType: "GameSession", predicate: NSPredicate(value: true))
+            query.sortDescriptors = [NSSortDescriptor(key: "date", ascending: false)]
+            let result = try await database.records(matching: query)
+            
+            return result.matchResults.compactMap { _, result in
+                switch result {
+                case .success(let record):
+                    return GameSession(from: record)
+                case .failure(let error):
+                    print("Error fetching game session record: \(error)")
+                    return nil
+                }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error fetching game sessions: \(error.localizedDescription)"
+            }
+            return []
+        }
+    }
+    
+    func saveGameSession(_ gameSession: GameSession) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let record = gameSession.toCKRecord()
+            _ = try await database.save(record)
+            
+            await MainActor.run {
+                if let index = gameSessions.firstIndex(where: { $0.id == gameSession.id }) {
+                    gameSessions[index] = gameSession
+                } else {
+                    gameSessions.insert(gameSession, at: 0) // Insert at beginning for chronological order
+                }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error saving game session: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    func deleteGameSession(_ gameSession: GameSession) async -> Bool {
+        guard isOnline else { return false }
+        
+        do {
+            let recordID = CKRecord.ID(recordName: gameSession.id.uuidString)
+            _ = try await database.deleteRecord(withID: recordID)
+            
+            await MainActor.run {
+                gameSessions.removeAll { $0.id == gameSession.id }
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error deleting game session: \(error.localizedDescription)"
+            }
+            return false
+        }
+    }
+    
+    // MARK: - Utility Methods
+    func getPlayer(by id: UUID) -> Player? {
+        return players.first { $0.id == id }
+    }
+    
+    func getGameMode(by id: UUID) -> GameMode? {
+        return gameModes.first { $0.id == id }
+    }
+    
+    func getGameSession(by id: UUID) -> GameSession? {
+        return gameSessions.first { $0.id == id }
+    }
+    
+    func clearErrorMessage() {
+        errorMessage = nil
+    }
+    
+    // MARK: - Default Data
+    private func createDefaultGameModes() {
+        let defaultModes = [
+            GameMode(
+                title: "5 players / S/. 2.00 entry",
+                maxPlayers: 5,
+                entryPriceSoles: 2.00,
+                prizePoolSoles: 8.00,
+                profitPct: 0.20
+            ),
+            GameMode(
+                title: "10 players / S/. 5.00 entry",
+                maxPlayers: 10,
+                entryPriceSoles: 5.00,
+                prizePoolSoles: 40.00,
+                profitPct: 0.20
+            ),
+            GameMode(
+                title: "20 players / S/. 10.00 entry",
+                maxPlayers: 20,
+                entryPriceSoles: 10.00,
+                prizePoolSoles: 160.00,
+                profitPct: 0.20
+            )
+        ]
+        
+        Task {
+            for mode in defaultModes {
+                _ = await saveGameMode(mode)
+            }
+        }
+    }
+}
+
+// MARK: - Error Handling
+extension CloudKitService {
+    func handleError(_ error: Error) {
+        if let ckError = error as? CKError {
+            switch ckError.code {
+            case .networkUnavailable:
+                errorMessage = "Network unavailable. Please check your internet connection."
+            case .quotaExceeded:
+                errorMessage = "iCloud storage quota exceeded."
+            case .requestRateLimited:
+                errorMessage = "Too many requests. Please try again later."
+            case .zoneNotFound:
+                errorMessage = "iCloud zone not found. Please try again."
+            default:
+                errorMessage = "CloudKit error: \(ckError.localizedDescription)"
+            }
+        } else {
+            errorMessage = "Unexpected error: \(error.localizedDescription)"
+        }
+    }
+} 
