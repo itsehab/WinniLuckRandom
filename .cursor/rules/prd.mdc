@@ -1,0 +1,135 @@
+
+# 📄 Product Requirements Document (PRD)
+
+## 📱 App Name
+**WinniLuckRandom**
+
+---
+
+## 🧭 Overview
+**Goal:**  
+Create a fun, visually appealing iOS app that lets users generate random numbers within a custom range, show them inside a gold coin design, display confetti on each number reveal, support background customization, voice the number out loud, and follow Apple Human Interface Guidelines — all in Spanish.
+
+---
+
+## 🌟 Core Features
+
+1. **Random Number Generator**
+   - User sets:
+     - `Inicio`: Starting number
+     - `Fin`: Ending number
+     - `Repeticiones`: How many random numbers to generate
+   - Output: Display one random number at a time (in gold coin), with confetti and voice.
+
+2. **Confetti Animation**
+   - Triggered on every number reveal.
+   - Use `ConfettiSwiftUI` or custom particle animation.
+
+3. **UI Design**
+   - Clean, minimal, joyful.
+   - Based on Apple Human Interface Guidelines.
+   - Gold coin center for random number.
+   - Spanish labels for all UI.
+
+4. **Background Customization**
+   - Users can choose an image from the photo library.
+   - Stored using `@AppStorage` or `FileManager`.
+
+5. **Voice Output**
+   - Number is spoken aloud using AVSpeechSynthesizer.
+   - Voice is in Spanish.
+
+---
+
+## 🗂️ Folder & File Structure
+
+```
+MonedaMagicaApp/
+├── Assets/
+│   ├── coin.png
+│   ├── launch_background.png
+│   └── default_background.jpg
+│
+├── Views/
+│   ├── HomeView.swift
+│   ├── ResultView.swift
+│   └── SettingsView.swift
+│
+├── ViewModels/
+│   └── RandomNumberViewModel.swift
+│
+├── Utils/
+│   ├── ConfettiHelper.swift
+│   └── SpeechHelper.swift
+│
+├── Extensions/
+│   └── ImagePicker.swift
+│
+├── Localization/
+│   └── es.lproj/
+│       └── Localizable.strings
+│
+├── Models/
+│   └── SettingsModel.swift
+│
+├── MonedaMagicaApp.swift
+├── Info.plist
+└── README.md
+```
+
+---
+
+## 🎨 UI Screens
+
+### 1. HomeView
+- Title: “Generar Números”
+- Input fields:
+  - “Número Inicial”
+  - “Número Final”
+  - “Repeticiones”
+- “Iniciar” button
+- Background image picker
+
+### 2. ResultView
+- Display gold coin with current number inside
+- Confetti animation
+- Button: “Siguiente”
+- Button: “Volver”
+
+### 3. SettingsView (optional)
+- Voice toggle
+- Reset background
+
+---
+
+## 🔊 Voice Engine (SpeechHelper.swift)
+- Use `AVSpeechSynthesizer`
+- Set language to `es-ES`
+
+---
+
+## 🎉 Confetti Animation
+- Use `ConfettiSwiftUI` or custom animation
+- Triggered when number is revealed
+
+---
+
+## 🌐 Localization (Localizable.strings)
+```swift
+"start_number" = "Número Inicial";
+"end_number" = "Número Final";
+"repeat_times" = "Repeticiones";
+"start" = "Iniciar";
+"next" = "Siguiente";
+"back" = "Volver";
+```
+
+---
+
+## 🛠 Notes for Cursor IDE
+- Main entry point: `WinniLuckRandomApp.swift`
+- Use modular folder structure
+- `ImagePicker.swift` bridges SwiftUI with `PHPickerViewController`
+- Make use of SwiftUI previews for UI testing
+
+---

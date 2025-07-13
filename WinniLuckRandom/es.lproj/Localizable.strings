@@ -1,0 +1,39 @@
+/* App Title */
+"app_title" = "WinniLuckRandom";
+
+/* Home Screen */
+"generate_numbers" = "Generar Números";
+"start_number" = "Número Inicial";
+"end_number" = "Número Final";
+"repeat_times" = "Repeticiones del Rango";
+"winners_count" = "Números Ganadores";
+"start" = "Iniciar";
+"select_background" = "Seleccionar Fondo";
+"settings" = "Configuración";
+"generation_preview" = "Rango: %d números × %d repeticiones = %d números totales";
+"generation_preview_with_winners" = "Rango: %d números × %d repeticiones = %d números totales, %d ganadores";
+
+/* Result Screen */
+"next" = "Siguiente";
+"back" = "Volver";
+"congratulations" = "¡Felicitaciones!";
+"all_numbers_generated" = "Todos los números han sido generados";
+"number_x_of_y" = "Número %d de %d";
+"auto_advance_info" = "Avance automático cada 3 segundos";
+"winning_numbers" = "Números que Alcanzaron la Meta";
+
+/* Settings Screen */
+"voice_enabled" = "Voz Activada";
+"reset_background" = "Restablecer Fondo";
+"background_reset" = "Fondo Restablecido";
+
+/* Error Messages */
+"invalid_input" = "Entrada Inválida";
+"start_must_be_less_than_end" = "El número inicial debe ser menor que el final";
+"repetitions_must_be_positive" = "Las repeticiones deben ser un número positivo";
+"please_fill_all_fields" = "Por favor, complete todos los campos";
+
+/* Accessibility */
+"gold_coin" = "Moneda de Oro";
+"random_number" = "Número Aleatorio";
+"confetti_animation" = "Animación de Confeti"; 

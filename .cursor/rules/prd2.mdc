@@ -1,0 +1,120 @@
+# 📄 PRD — WinniLuckRandom — v2.0  
+*Feature Add-on: Game Modes, Player Assignment & Admin Analytics*  
+**All monetary values are in Peruvian Soles (S/.)**
+
+---
+
+## 0. Scope & Non-Goals
+* **Keep** existing game flow 100 % intact.  
+* **Add** seamless capabilities to:  
+  1. register players (first name + hidden UUID) and map them to numbers,  
+  2. pre-define secret **Game Modes** (entry price, prize pool, winners, profit %) and pick one via a *Mode* dropdown,  
+  3. surface an **Admin Dashboard** (Face ID / PIN-locked) with full analytics & profit tracking in Soles.  
+* **Do NOT** publish to App Store; app runs on a single device.
+
+---
+
+## 1. Core Concepts & Data Models
+
+| Model | Fields | Notes |
+|-------|--------|-------|
+| **Player** | `id: UUID` • `firstName: String` | No surname required. |
+| **GameMode** | `id` • `title` (e.g. “10 players / S/. 5 entry”) • `maxPlayers: Int` • `entryPriceSoles: Decimal` • `prizePoolSoles: Decimal` • `profitPct: Double` (e.g. 0.20) | Created/edited only from Admin. |
+| **GameSession** | `id` • `modeID` • `startRange` • `endRange` • `repetitions` • `numWinners` • `[playerIDs]` • `winningNumbers` • `winnerIDs` • `date` | One record per finished game. |
+| **StatsSummary** (computed) | daily / weekly / monthly aggregates | Derived on demand. |
+
+> **Persistence:** CloudKit (private DB). Offline writes queue in Core Data and sync later.
+
+---
+
+## 2. User-Facing Flows
+
+### 2.1 Public Flow (unchanged + new “Mode”)
+1. **Home**  
+   - New **Mode** dropdown (picker) — displays `GameMode.title`.  
+   - Existing inputs: start number, end number, repetitions, winners.  
+2. **Player Entry**  
+   - TextField “First name” + **Add**.  
+   - List auto-assigns numbers 1…`maxPlayers`; capped at `maxPlayers`.  
+3. **Play Game** — unchanged (confetti + voice on each random).  
+4. **Winners Screen** — shows winning number *and* first name under the gold coin; **Done** saves a `GameSession`.
+
+### 2.2 Admin Flow *(Settings → “Admin Mode” → Face ID/PIN)*
+| Tab | Key Elements |
+|-----|--------------|
+| **Dashboard** | KPI cards: **Total Games**, **Total Profit (S/.)**, **Total Payout (S/.)**, **Unique Players**, **Repeat Rate**. Filters: **Day / Week / Month / Year / Custom**. |
+| **Game History** | Table of sessions (date, mode, profit S/., winners…). Swipe-to-delete “Delete Simulated”. |
+| **Game Modes** | List of modes ➜ Edit / Delete. “+ Add Mode” sheet: maxPlayers, entryPriceSoles, prizePoolSoles, profitPct, auto-suggested title. |
+
+---
+
+## 3. Screen Inventory & File Structure (add-ons)
+*(All existing files remain intact.)*
+Views/
+├── PlayerEntryView.swift
+├── Admin/
+│   ├── AdminUnlockView.swift
+│   ├── DashboardView.swift
+│   ├── GameHistoryView.swift
+│   └── GameModesView.swift
+ViewModels/
+├── PlayerEntryVM.swift
+├── Admin/
+│   ├── DashboardVM.swift
+│   ├── GameHistoryVM.swift
+│   └── GameModesVM.swift
+Models/
+├── Player.swift
+├── GameMode.swift
+└── GameSession.swift
+Services/
+├── CloudKitService.swift
+└── StatsService.swift
+Security/
+└── AdminAuthManager.swift
+
+---
+
+## 4. Key Requirements
+
+### 4.1 Player Assignment
+* **R1.1** Picking a **Mode** auto-allocates numbers 1…`maxPlayers`.  
+* **R1.2** “Start Game” disabled until all required players are added.  
+* **R1.3** Duplicate first names allowed; uniqueness via hidden UUID.
+
+### 4.2 Game Modes
+* **R2.1** Visible/editable only in Admin.  
+* **R2.2** Deleting a mode leaves historic sessions intact (detached copy).
+
+### 4.3 Profit Calculation (all S/.)
+* gross = entryPriceSoles × playerCount
+* profit = (profitPct != nil) ? gross × profitPct : (gross – prizePoolSoles)
+* payout = prizePoolSoles
+### 4.4 Analytics
+* **R3.1** Dashboard counters update after each `GameSession` save.  
+* **R3.2** Filters recalc via `StatsService`.  
+* **R3.3** On-screen viewing only; no CSV export.
+
+### 4.5 Security
+* **R4.1** Admin unlock: Face ID → fallback PIN (6 digits).  
+* **R4.2** 3 failed PIN attempts → lockout 5 minutes.
+
+---
+
+## 5. Open Questions / Future Considerations
+1. Need to edit a finished session?  
+2. Flag simulated games at creation vs. deleting later?  
+3. Multi-device sync (now single device).
+
+---
+
+## 6. Acceptance Criteria
+* **AC-1** Player assignment supports `maxPlayers` ≤ 99.  
+* **AC-2** Selecting a Mode fills hidden financial fields (S/.).  
+* **AC-3** Dashboard totals (S/.) match manual spreadsheet.  
+* **AC-4** Admin lock prevents unintended access.  
+* **AC-5** CloudKit sync works offline → online.
+
+---
+
+*Prepared for Cursor IDE — extend codebase per paths above; leave existing logic untouched.*
