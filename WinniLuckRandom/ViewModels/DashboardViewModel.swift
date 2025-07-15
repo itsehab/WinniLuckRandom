@@ -11,6 +11,7 @@ class DashboardViewModel: ObservableObject {
     @Published var recentGameSessions: [GameSession] = []
     @Published var filteredGameSessions: [GameSession] = []
     @Published var gameModes: [GameMode] = []
+    @Published var dailyProfitData: [DailyProfitData] = []
     
     private let statsService: StatsService
     private let storageManager: StorageManager
@@ -19,6 +20,28 @@ class DashboardViewModel: ObservableObject {
     struct DateRange {
         let startDate: Date
         let endDate: Date
+    }
+    
+    struct DailyProfitData: Identifiable {
+        let id = UUID()
+        let date: Date
+        let profit: Decimal
+        let sessionCount: Int
+        
+        var formattedDate: String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
+        }
+        
+        var formattedProfit: String {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .currency
+            formatter.currencyCode = "PEN"
+            formatter.currencySymbol = "S/."
+            formatter.maximumFractionDigits = 2
+            return formatter.string(from: NSDecimalNumber(decimal: profit)) ?? "S/. 0.00"
+        }
     }
     
     nonisolated init(statsService: StatsService? = nil, storageManager: StorageManager? = nil) {
@@ -55,12 +78,16 @@ class DashboardViewModel: ObservableObject {
             // Filter sessions based on selected time filter
             let filteredSessions = filterSessionsByTimeFilter(allSessions)
             
+            // Calculate daily profit data for the last 30 days
+            let dailyProfits = calculateDailyProfitData(from: allSessions)
+            
             // Update UI on main thread
             await MainActor.run {
                 self.stats = summary
                 self.recentGameSessions = Array(allSessions.prefix(10))
                 self.filteredGameSessions = filteredSessions
                 self.gameModes = allGameModes
+                self.dailyProfitData = dailyProfits
                 self.isLoading = false
                 
                 // Update error from storage manager if needed
@@ -100,6 +127,47 @@ class DashboardViewModel: ObservableObject {
         case .profitDesc:
             return filteredGameSessions.sorted { $0.profit > $1.profit }
         }
+    }
+    
+    private func calculateDailyProfitData(from sessions: [GameSession]) -> [DailyProfitData] {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Create date range for the last 30 days
+        let startDate = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+        let endDate = today
+        
+        // Filter sessions to last 30 days
+        let filteredSessions = sessions.filter { session in
+            session.date >= startDate && session.date <= endDate
+        }
+        
+        // Group sessions by day
+        let groupedSessions = Dictionary(grouping: filteredSessions) { session in
+            calendar.startOfDay(for: session.date)
+        }
+        
+        // Create daily profit data for each day in the range
+        var dailyData: [DailyProfitData] = []
+        var currentDate = startDate
+        
+        while currentDate <= endDate {
+            let dayStart = calendar.startOfDay(for: currentDate)
+            let sessionsForDay = groupedSessions[dayStart] ?? []
+            
+            let totalProfit = sessionsForDay.reduce(Decimal(0)) { $0 + $1.profit }
+            let sessionCount = sessionsForDay.count
+            
+            dailyData.append(DailyProfitData(
+                date: dayStart,
+                profit: totalProfit,
+                sessionCount: sessionCount
+            ))
+            
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        
+        return dailyData.sorted { $0.date < $1.date }
     }
     
     func getGameModeTitle(for modeID: UUID) -> String {

@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showDatePicker = false
     @State private var selectedSortOption: SortOption = .profitAsc
+    @State private var selectedDate: Date?
     
     enum SortOption: String, CaseIterable {
         case profitAsc = "profitAsc"
@@ -61,6 +62,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func statsContent(stats: StatsSummary) -> some View {
         kpiCardsSection(stats: stats)
+        profitChartSection
         timeFilterSection
         sortBySection
         gameHistorySection
@@ -126,6 +128,138 @@ struct DashboardView: View {
             )
         }
         .padding(.horizontal)
+    }
+    
+    private var profitChartSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Ganancias Diarias (30 días)")
+                .font(.headline)
+                .padding(.horizontal)
+            
+            if viewModel.dailyProfitData.isEmpty {
+                Text("No hay datos disponibles")
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                Chart(viewModel.dailyProfitData) { data in
+                    LineMark(
+                        x: .value("Fecha", data.date),
+                        y: .value("Ganancia", data.profit)
+                    )
+                    .foregroundStyle(.blue)
+                    .symbol(.circle)
+                    .interpolationMethod(.catmullRom)
+                    
+                    AreaMark(
+                        x: .value("Fecha", data.date),
+                        y: .value("Ganancia", data.profit)
+                    )
+                    .foregroundStyle(.blue.opacity(0.2))
+                    .interpolationMethod(.catmullRom)
+                    
+                    // Add point mark for selected date
+                    if let selectedDate = selectedDate,
+                       let selectedData = viewModel.dailyProfitData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
+                        PointMark(
+                            x: .value("Fecha", selectedData.date),
+                            y: .value("Ganancia", selectedData.profit)
+                        )
+                        .foregroundStyle(.white)
+                        .symbolSize(100)
+                        
+                        PointMark(
+                            x: .value("Fecha", selectedData.date),
+                            y: .value("Ganancia", selectedData.profit)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(50)
+                    }
+                }
+                .frame(height: 200)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day, count: 7)) { value in
+                        if let date = value.as(Date.self) {
+                            AxisValueLabel {
+                                Text(date, format: .dateTime.day().month(.abbreviated))
+                            }
+                        }
+                        AxisGridLine()
+                        AxisTick()
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        if let profit = value.as(Decimal.self) {
+                            AxisValueLabel {
+                                Text("S/. \(profit)")
+                            }
+                        }
+                        AxisGridLine()
+                        AxisTick()
+                    }
+                }
+                .chartBackground { chartProxy in
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        updateSelectedDate(at: value.location, in: geometry, chartProxy: chartProxy)
+                                    }
+                                    .onEnded { _ in
+                                        selectedDate = nil
+                                    }
+                            )
+                    }
+                }
+                .padding(.horizontal)
+                .overlay(alignment: .topTrailing) {
+                    // Tooltip
+                    if let selectedDate = selectedDate,
+                       let selectedData = viewModel.dailyProfitData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(selectedData.formattedDate)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text(selectedData.formattedProfit)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.blue)
+                            
+                            Text("\(selectedData.sessionCount) sesiones")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(.systemBackground))
+                                .shadow(radius: 4)
+                        )
+                        .animation(.easeInOut(duration: 0.2), value: selectedDate)
+                    }
+                }
+            }
+        }
+        .padding(.vertical)
+    }
+    
+    private func updateSelectedDate(at location: CGPoint, in geometry: GeometryProxy, chartProxy: ChartProxy) {
+        let xPosition = location.x - geometry.frame(in: .local).minX
+        
+        if let date: Date = chartProxy.value(atX: xPosition) {
+            // Find the closest data point
+            let closestData = viewModel.dailyProfitData.min { data1, data2 in
+                abs(data1.date.timeIntervalSince(date)) < abs(data2.date.timeIntervalSince(date))
+            }
+            
+            if let closestData = closestData {
+                selectedDate = closestData.date
+            }
+        }
     }
     
     private var timeFilterSection: some View {
