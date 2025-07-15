@@ -219,6 +219,20 @@ struct ResultView: View {
         .fullScreenCover(isPresented: $viewModel.showingCongrats) {
             CongratsView(viewModel: viewModel, settings: settings, parentDismiss: dismiss)
         }
+        .fullScreenCover(isPresented: $viewModel.showingWinners) {
+            CongratulationsView(
+                winners: viewModel.gameWinners,
+                gameMode: viewModel.currentGameMode ?? GameMode(title: "Juego", maxPlayers: 50, entryPriceSoles: 10, prizePerWinner: 100, maxWinners: 3, repetitions: 3),
+                onPlayAgain: {
+                    viewModel.startNewGame()
+                },
+                onGoHome: {
+                    viewModel.goHome()
+                    dismiss()
+                },
+                settings: settings
+            )
+        }
     }
     
     private func animateEntrance() {
@@ -290,13 +304,13 @@ struct ResultView: View {
                 // Check if we should stop the game due to having enough winners
                 if viewModel.shouldStopGame() {
                     stopTimer()
-                    viewModel.showingCongrats = true
+                    viewModel.finalizeGame()
                 } else if viewModel.hasNextNumber {
                     nextNumber()
                 } else {
                     stopTimer()
                     // Trigger congratulations screen
-                    viewModel.showingCongrats = true
+                    viewModel.finalizeGame()
                 }
             }
         }

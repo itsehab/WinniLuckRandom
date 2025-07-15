@@ -12,17 +12,20 @@ struct Player: Identifiable, Codable, Hashable {
     let id: UUID
     let firstName: String
     var selectedNumber: Int? // Optional selected number for manual assignment
+    let avatarURL: String // DiceBear avatar URL
     
-    init(firstName: String, selectedNumber: Int? = nil) {
+    init(firstName: String, selectedNumber: Int? = nil, avatarURL: String? = nil) {
         self.id = UUID()
         self.firstName = firstName
         self.selectedNumber = selectedNumber
+        self.avatarURL = avatarURL ?? AvatarService.generateAvatarURL(seed: UUID().uuidString)
     }
     
-    init(id: UUID, firstName: String, selectedNumber: Int? = nil) {
+    init(id: UUID, firstName: String, selectedNumber: Int? = nil, avatarURL: String? = nil) {
         self.id = id
         self.firstName = firstName
         self.selectedNumber = selectedNumber
+        self.avatarURL = avatarURL ?? AvatarService.generateAvatarURL(seed: id.uuidString)
     }
 }
 
@@ -34,6 +37,7 @@ extension Player {
         let record = CKRecord(recordType: "Player")
         record["id"] = id.uuidString
         record["firstName"] = firstName
+        record["avatarURL"] = avatarURL
         if let number = selectedNumber {
             record["selectedNumber"] = number
         }
@@ -51,6 +55,7 @@ extension Player {
         self.id = id
         self.firstName = firstName
         self.selectedNumber = record["selectedNumber"] as? Int
+        self.avatarURL = record["avatarURL"] as? String ?? AvatarService.generateAvatarURL(seed: id.uuidString)
     }
 }
 

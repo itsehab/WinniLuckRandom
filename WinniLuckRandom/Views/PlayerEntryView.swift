@@ -602,6 +602,12 @@ struct SimplifiedPlayerCard: View {
         VStack(spacing: 16) {
             // Player info row
             HStack(spacing: 12) {
+                // Player avatar
+                AvatarImageView(
+                    avatarURL: player.avatarURL,
+                    size: isCompactMode ? 32 : 40
+                )
+                
                 // Player name
                 Text(player.firstName)
                     .font(isCompactMode ? .subheadline : .headline)

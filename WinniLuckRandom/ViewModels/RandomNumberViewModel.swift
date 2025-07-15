@@ -26,6 +26,8 @@ class RandomNumberViewModel: ObservableObject {
     @Published var currentGameSession: GameSession?
     @Published var currentPlayers: [Player] = []
     @Published var isNewGameStarting: Bool = false
+    @Published var gameWinners: [WinnerData] = []
+    @Published var showingWinners: Bool = false
     
     private var generatedNumbers: [Int] = []
     private var currentIndex: Int = 0
@@ -135,7 +137,7 @@ class RandomNumberViewModel: ObservableObject {
     
     func nextNumber() {
         guard hasNextNumber else {
-            showingCongrats = true
+            finalizeGame()
             return
         }
         
@@ -148,7 +150,7 @@ class RandomNumberViewModel: ObservableObject {
         
         // Check if we have enough winners and should stop the game
         if shouldStopGame() {
-            showingCongrats = true
+            finalizeGame()
             return
         }
     }
@@ -166,9 +168,11 @@ class RandomNumberViewModel: ObservableObject {
         rangeSize = 0
         showingResult = false
         showingCongrats = false
+        showingWinners = false
         isGenerating = false
         isNewGameStarting = false
         currentPlayers.removeAll()
+        gameWinners.removeAll()
     }
     
     func goHome() {
@@ -272,5 +276,42 @@ class RandomNumberViewModel: ObservableObject {
         
         // Check if we have enough winners
         return winnerOrder.count >= requiredWinners
+    }
+    
+    func finalizeGame() {
+        // Generate winner data
+        gameWinners = generateWinnerData()
+        
+        // Show winners screen
+        showingWinners = true
+        showingCongrats = false
+    }
+    
+    func generateWinnerData() -> [WinnerData] {
+        let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
+        let winnerNumbers = Array(winnerOrder.prefix(requiredWinners))
+        
+        return winnerNumbers.compactMap { number in
+            // Find the player with this number
+            if let player = currentPlayers.first(where: { $0.selectedNumber == number }) {
+                let finalCount = numberCounts[number] ?? 0
+                return WinnerData(
+                    player: player,
+                    number: number,
+                    finalCount: finalCount
+                )
+            }
+            return nil
+        }
+    }
+    
+    func startNewGame() {
+        // Reset game state but keep current players
+        let playersToKeep = currentPlayers
+        reset()
+        currentPlayers = playersToKeep
+        
+        // Generate new numbers
+        generateRandomNumbers()
     }
 } 
