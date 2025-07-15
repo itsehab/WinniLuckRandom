@@ -171,12 +171,11 @@ struct DashboardView: View {
             Button(action: {
                 selectedSortOption = selectedSortOption == .profitAsc ? .profitDesc : .profitAsc
             }) {
-                Image(systemName: selectedSortOption == .profitAsc ? "arrow.up.down" : "arrow.up.down")
+                Image(systemName: "arrow.up.down")
                     .font(.title2)
                     .foregroundColor(.blue)
                     .rotationEffect(.degrees(selectedSortOption == .profitAsc ? 0 : 180))
             }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(.horizontal)
     }
@@ -330,6 +329,8 @@ struct DashboardButton: View {
     
     var body: some View {
         HStack {
+            Spacer()
+            
             Image(systemName: icon)
                 .foregroundColor(.white)
                 .font(.title2)
@@ -339,9 +340,6 @@ struct DashboardButton: View {
                 .foregroundColor(.white)
             
             Spacer()
-            
-            Image(systemName: "chevron.right")
-                .foregroundColor(.white)
         }
         .padding()
         .background(color)
