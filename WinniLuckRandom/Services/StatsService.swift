@@ -50,7 +50,7 @@ struct StatsSummary {
     // MARK: - Computed Properties
     var profitMargin: Double {
         guard totalGrossIncome > 0 else { return 0 }
-        return Double(totalProfit / totalGrossIncome)
+        return NSDecimalNumber(decimal: totalProfit).doubleValue / NSDecimalNumber(decimal: totalGrossIncome).doubleValue
     }
     
     var averageGameValue: Decimal {
@@ -67,7 +67,7 @@ class StatsService: ObservableObject {
     @Published var currentStats: StatsSummary?
     @Published var isLoading = false
     
-    private let cloudKitService = CloudKitService.shared
+    private let storageManager = StorageManager.shared
     private let calendar = Calendar.current
     
     init() {}
@@ -83,7 +83,9 @@ class StatsService: ObservableObject {
             isLoading = true
         }
         
-        let sessions = getFilteredSessions(for: filter, startDate: startDate, endDate: endDate)
+        let sessions = await getFilteredSessions(for: filter, startDate: startDate, endDate: endDate)
+        
+        let mostPopularGameMode = await findMostPopularGameMode(from: sessions)
         
         let stats = StatsSummary(
             totalGames: sessions.count,
@@ -94,7 +96,7 @@ class StatsService: ObservableObject {
             repeatRate: calculateRepeatRate(from: sessions),
             averageProfit: calculateAverageProfit(from: sessions),
             averagePlayersPerGame: calculateAveragePlayersPerGame(from: sessions),
-            mostPopularGameMode: findMostPopularGameMode(from: sessions),
+            mostPopularGameMode: mostPopularGameMode,
             timeFilter: filter,
             startDate: getFilterStartDate(for: filter, customStart: startDate),
             endDate: getFilterEndDate(for: filter, customEnd: endDate)
@@ -113,9 +115,9 @@ class StatsService: ObservableObject {
         for filter: TimeFilter,
         startDate: Date? = nil,
         endDate: Date? = nil
-    ) -> [GameSession] {
+    ) async -> [GameSession] {
         
-        let sessions = cloudKitService.gameSessions
+        let sessions = await storageManager.fetchGameSessions()
         
         switch filter {
         case .day:
@@ -174,7 +176,7 @@ class StatsService: ObservableObject {
         return Double(totalPlayers) / Double(sessions.count)
     }
     
-    private func findMostPopularGameMode(from sessions: [GameSession]) -> String? {
+    private func findMostPopularGameMode(from sessions: [GameSession]) async -> String? {
         let modeFrequency = Dictionary(grouping: sessions, by: { $0.modeID })
             .mapValues { $0.count }
         
@@ -182,7 +184,8 @@ class StatsService: ObservableObject {
             return nil
         }
         
-        return cloudKitService.getGameMode(by: mostFrequentModeID)?.title
+        let gameModes = await storageManager.fetchGameModes()
+        return gameModes.first(where: { $0.id == mostFrequentModeID })?.title
     }
     
     // MARK: - Date Helpers
@@ -220,36 +223,40 @@ class StatsService: ObservableObject {
     }
     
     // MARK: - Additional Analytics
-    func getTopWinners(limit: Int = 5) -> [(Player, Int)] {
-        let allWinnerIDs = cloudKitService.gameSessions.flatMap { $0.winnerIDs }
+    func getTopWinners(limit: Int = 5) async -> [(Player, Int)] {
+        let allSessions = await storageManager.fetchGameSessions()
+        let allWinnerIDs = allSessions.flatMap { $0.winnerIDs }
         let winnerFrequency = Dictionary(grouping: allWinnerIDs, by: { $0 })
             .mapValues { $0.count }
         
+        let allPlayers = await storageManager.fetchPlayers()
         let topWinners = winnerFrequency
             .sorted { $0.value > $1.value }
             .prefix(limit)
-            .compactMap { (id, count) in
-                guard let player = cloudKitService.getPlayer(by: id) else { return nil }
+            .compactMap { (id, count) -> (Player, Int)? in
+                guard let player = allPlayers.first(where: { $0.id == id }) else { return nil }
                 return (player, count)
             }
         
         return Array(topWinners)
     }
     
-    func getRevenueByGameMode() -> [(GameMode, Decimal)] {
-        let sessionsByMode = Dictionary(grouping: cloudKitService.gameSessions, by: { $0.modeID })
+    func getRevenueByGameMode() async -> [(GameMode, Decimal)] {
+        let allSessions = await storageManager.fetchGameSessions()
+        let sessionsByMode = Dictionary(grouping: allSessions, by: { $0.modeID })
         
+        let allGameModes = await storageManager.fetchGameModes()
         return sessionsByMode
             .compactMap { (modeID, sessions) in
-                guard let mode = cloudKitService.getGameMode(by: modeID) else { return nil }
+                guard let mode = allGameModes.first(where: { $0.id == modeID }) else { return nil }
                 let revenue = sessions.reduce(0) { $0 + $1.grossIncome }
                 return (mode, revenue)
             }
             .sorted { $0.1 > $1.1 }
     }
     
-    func getGameFrequencyByDayOfWeek() -> [String: Int] {
-        let sessions = cloudKitService.gameSessions
+    func getGameFrequencyByDayOfWeek() async -> [String: Int] {
+        let sessions = await storageManager.fetchGameSessions()
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
         formatter.locale = Locale(identifier: "es_ES")
@@ -260,8 +267,8 @@ class StatsService: ObservableObject {
         return dayFrequency
     }
     
-    func getMonthlyTrend() -> [(String, Decimal)] {
-        let sessions = cloudKitService.gameSessions
+    func getMonthlyTrend() async -> [(String, Decimal)] {
+        let sessions = await storageManager.fetchGameSessions()
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM yyyy"
         formatter.locale = Locale(identifier: "es_ES")

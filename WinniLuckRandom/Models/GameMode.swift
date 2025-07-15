@@ -13,25 +13,60 @@ struct GameMode: Identifiable, Codable, Hashable {
     let title: String
     let maxPlayers: Int
     let entryPriceSoles: Decimal
-    let prizePoolSoles: Decimal
-    let profitPct: Double? // Optional - if nil, use (gross - prizePool) calculation
+    let prizeTiers: [Decimal] // Array of prizes for each winner position [1st, 2nd, 3rd, ...]
+    let maxWinners: Int // Maximum number of winners allowed
+    let repetitions: Int // How many times each number needs to be called to win
+    let order: Int // Display order in the home page (lower numbers appear first)
     
-    init(title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizePoolSoles: Decimal, profitPct: Double? = nil) {
+    // Computed property for backward compatibility
+    var prizePerWinner: Decimal {
+        return prizeTiers.first ?? 0
+    }
+    
+    init(title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizeTiers: [Decimal], maxWinners: Int = 1, repetitions: Int = 1, order: Int = 0) {
         self.id = UUID()
         self.title = title
         self.maxPlayers = maxPlayers
         self.entryPriceSoles = entryPriceSoles
-        self.prizePoolSoles = prizePoolSoles
-        self.profitPct = profitPct
+        self.prizeTiers = prizeTiers
+        self.maxWinners = maxWinners
+        self.repetitions = repetitions
+        self.order = order
     }
     
-    init(id: UUID, title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizePoolSoles: Decimal, profitPct: Double? = nil) {
+    init(id: UUID, title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizeTiers: [Decimal], maxWinners: Int = 1, repetitions: Int = 1, order: Int = 0) {
         self.id = id
         self.title = title
         self.maxPlayers = maxPlayers
         self.entryPriceSoles = entryPriceSoles
-        self.prizePoolSoles = prizePoolSoles
-        self.profitPct = profitPct
+        self.prizeTiers = prizeTiers
+        self.maxWinners = maxWinners
+        self.repetitions = repetitions
+        self.order = order
+    }
+    
+    // Convenience init for backward compatibility
+    init(title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizePerWinner: Decimal, maxWinners: Int = 1, repetitions: Int = 1, order: Int = 0) {
+        self.id = UUID()
+        self.title = title
+        self.maxPlayers = maxPlayers
+        self.entryPriceSoles = entryPriceSoles
+        self.prizeTiers = Array(repeating: prizePerWinner, count: maxWinners)
+        self.maxWinners = maxWinners
+        self.repetitions = repetitions
+        self.order = order
+    }
+    
+    // Convenience init with ID for backward compatibility
+    init(id: UUID, title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizePerWinner: Decimal, maxWinners: Int = 1, repetitions: Int = 1, order: Int = 0) {
+        self.id = id
+        self.title = title
+        self.maxPlayers = maxPlayers
+        self.entryPriceSoles = entryPriceSoles
+        self.prizeTiers = Array(repeating: prizePerWinner, count: maxWinners)
+        self.maxWinners = maxWinners
+        self.repetitions = repetitions
+        self.order = order
     }
 }
 
@@ -43,24 +78,35 @@ extension GameMode {
         return entryPriceSoles * Decimal(playerCount)
     }
     
-    /// Calculate profit based on profit percentage or gross - prize pool
-    func calculateProfit(for playerCount: Int) -> Decimal {
-        let gross = calculateGross(for: playerCount)
-        
-        if let profitPct = profitPct {
-            return gross * Decimal(profitPct)
-        } else {
-            return gross - prizePoolSoles
+    /// Calculate total prize pool based on number of winners
+    func calculateTotalPrizePool(for numberOfWinners: Int) -> Decimal {
+        var total: Decimal = 0
+        for i in 0..<min(numberOfWinners, prizeTiers.count) {
+            total += prizeTiers[i]
         }
+        return total
     }
     
-    /// Calculate actual payout (always the prize pool)
-    func calculatePayout() -> Decimal {
-        return prizePoolSoles
+    /// Calculate profit as the remaining money after paying winners
+    func calculateProfit(for playerCount: Int, winners: Int) -> Decimal {
+        let gross = calculateGross(for: playerCount)
+        let totalPrizePool = calculateTotalPrizePool(for: winners)
+        return gross - totalPrizePool
+    }
+    
+    /// Calculate actual payout based on number of winners
+    func calculatePayout(for numberOfWinners: Int) -> Decimal {
+        return calculateTotalPrizePool(for: numberOfWinners)
+    }
+    
+    /// Get prize for specific winner position (1-indexed)
+    func getPrize(for position: Int) -> Decimal {
+        guard position > 0 && position <= prizeTiers.count else { return 0 }
+        return prizeTiers[position - 1]
     }
     
     /// Auto-generate title based on parameters
-    static func generateTitle(maxPlayers: Int, entryPriceSoles: Decimal) -> String {
+    static func generateTitle(maxPlayers: Int, entryPriceSoles: Decimal, prizeTiers: [Decimal], maxWinners: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "PEN"
@@ -69,15 +115,27 @@ extension GameMode {
         formatter.maximumFractionDigits = 2
         
         let priceString = formatter.string(from: entryPriceSoles as NSDecimalNumber) ?? "S/. \(entryPriceSoles)"
-        return "\(maxPlayers) players / \(priceString) entry"
+        
+        if maxWinners == 1 {
+            let prizeString = formatter.string(from: prizeTiers.first as NSDecimalNumber? ?? 0) ?? "S/. 0"
+            return "\(maxPlayers) players / \(priceString) entry / \(prizeString) prize"
+        } else {
+            let totalPrizes = prizeTiers.reduce(0, +)
+            let totalPrizeString = formatter.string(from: totalPrizes as NSDecimalNumber) ?? "S/. 0"
+            return "\(maxPlayers) players / \(priceString) entry / \(totalPrizeString) total prizes"
+        }
     }
     
     /// Check if the game mode configuration is valid
     var isValid: Bool {
         return maxPlayers > 0 && 
-               maxPlayers <= 99 && 
+               maxPlayers <= 999 && // Increased limit from 99 to 999
                entryPriceSoles > 0 && 
-               prizePoolSoles >= 0 && 
+               !prizeTiers.isEmpty &&
+               prizeTiers.allSatisfy { $0 >= 0 } &&
+               maxWinners > 0 &&
+               maxWinners <= maxPlayers && // Can't have more winners than players
+               prizeTiers.count >= maxWinners && // Must have prizes for all winners
                !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
@@ -85,17 +143,7 @@ extension GameMode {
 // MARK: - CloudKit Support
 extension GameMode {
     
-    /// Convert GameMode to CloudKit CKRecord
-    func toCKRecord() -> CKRecord {
-        let record = CKRecord(recordType: "GameMode")
-        record["id"] = id.uuidString
-        record["title"] = title
-        record["maxPlayers"] = maxPlayers
-        record["entryPriceSoles"] = entryPriceSoles as NSDecimalNumber
-        record["prizePoolSoles"] = prizePoolSoles as NSDecimalNumber
-        record["profitPct"] = profitPct
-        return record
-    }
+
     
     /// Initialize GameMode from CloudKit CKRecord
     init?(from record: CKRecord) {
@@ -103,8 +151,7 @@ extension GameMode {
               let id = UUID(uuidString: idString),
               let title = record["title"] as? String,
               let maxPlayers = record["maxPlayers"] as? Int,
-              let entryPriceNumber = record["entryPriceSoles"] as? NSDecimalNumber,
-              let prizePoolNumber = record["prizePoolSoles"] as? NSDecimalNumber else {
+              let entryPriceNumber = record["entryPriceSoles"] as? NSDecimalNumber else {
             return nil
         }
         
@@ -112,8 +159,35 @@ extension GameMode {
         self.title = title
         self.maxPlayers = maxPlayers
         self.entryPriceSoles = entryPriceNumber.decimalValue
-        self.prizePoolSoles = prizePoolNumber.decimalValue
-        self.profitPct = record["profitPct"] as? Double
+        self.maxWinners = record["maxWinners"] as? Int ?? 1
+        self.repetitions = record["repetitions"] as? Int ?? 1
+        self.order = record["order"] as? Int ?? 0
+        
+        // Handle prize tiers - check new format first, then fall back to old format
+        if let prizeNumbers = record["prizeTiers"] as? [NSDecimalNumber] {
+            self.prizeTiers = prizeNumbers.map { $0.decimalValue }
+        } else if let prizePerWinnerNumber = record["prizePerWinner"] as? NSDecimalNumber {
+            // Backward compatibility with old format
+            self.prizeTiers = Array(repeating: prizePerWinnerNumber.decimalValue, count: maxWinners)
+        } else {
+            self.prizeTiers = [0]
+        }
+    }
+    
+    /// Convert GameMode to CloudKit CKRecord for saving
+    func toCKRecord() -> CKRecord {
+        let record = CKRecord(recordType: "GameMode", recordID: CKRecord.ID(recordName: id.uuidString))
+        
+        record["id"] = id.uuidString
+        record["title"] = title
+        record["maxPlayers"] = maxPlayers
+        record["entryPriceSoles"] = NSDecimalNumber(decimal: entryPriceSoles)
+        record["maxWinners"] = maxWinners
+        record["repetitions"] = repetitions
+        record["order"] = order
+        record["prizeTiers"] = prizeTiers.map { NSDecimalNumber(decimal: $0) }
+        
+        return record
     }
 }
 
@@ -132,8 +206,8 @@ extension GameMode {
         return formatter.string(from: entryPriceSoles as NSDecimalNumber) ?? "S/. \(entryPriceSoles)"
     }
     
-    /// Formatted prize pool for display
-    var formattedPrizePool: String {
+    /// Formatted prize for specific position
+    func formattedPrize(for position: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "PEN"
@@ -141,17 +215,60 @@ extension GameMode {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 2
         
-        return formatter.string(from: prizePoolSoles as NSDecimalNumber) ?? "S/. \(prizePoolSoles)"
+        let prize = getPrize(for: position)
+        return formatter.string(from: prize as NSDecimalNumber) ?? "S/. \(prize)"
     }
     
-    /// Formatted profit percentage for display
-    var formattedProfitPct: String {
-        guard let profitPct = profitPct else { return "N/A" }
+    /// Formatted prize per winner for display (backward compatibility)
+    var formattedPrizePerWinner: String {
+        return formattedPrize(for: 1)
+    }
+    
+    /// Formatted total prize pool for display
+    var formattedTotalPrizePool: String {
+        let totalPrizes = prizeTiers.reduce(0, +)
         let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "PEN"
+        formatter.currencySymbol = "S/."
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 1
+        formatter.maximumFractionDigits = 2
         
-        return formatter.string(from: NSNumber(value: profitPct)) ?? "\(Int(profitPct * 100))%"
+        return formatter.string(from: totalPrizes as NSDecimalNumber) ?? "S/. \(totalPrizes)"
+    }
+    
+    /// Formatted max winners for display
+    var formattedMaxWinners: String {
+        if maxWinners == 1 {
+            return "1 winner"
+        } else {
+            return "Up to \(maxWinners) winners"
+        }
+    }
+    
+    /// Formatted total prize pool for display given number of winners
+    func formattedTotalPrizePool(for numberOfWinners: Int) -> String {
+        let totalPrizePool = calculateTotalPrizePool(for: numberOfWinners)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "PEN"
+        formatter.currencySymbol = "S/."
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        
+        return formatter.string(from: totalPrizePool as NSDecimalNumber) ?? "S/. \(totalPrizePool)"
+    }
+    
+    /// Formatted profit for display
+    func formattedProfit(for playerCount: Int, winners: Int) -> String {
+        let profit = calculateProfit(for: playerCount, winners: winners)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "PEN"
+        formatter.currencySymbol = "S/."
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        
+        return formatter.string(from: profit as NSDecimalNumber) ?? "S/. \(profit)"
     }
 } 

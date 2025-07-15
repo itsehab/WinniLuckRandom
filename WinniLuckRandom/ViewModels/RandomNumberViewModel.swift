@@ -22,12 +22,16 @@ class RandomNumberViewModel: ObservableObject {
     @Published var showingCongrats: Bool = false
     @Published var totalNumbersToGenerate: Int = 0
     @Published var rangeSize: Int = 0
+    @Published var currentGameMode: GameMode?
+    @Published var currentGameSession: GameSession?
+    @Published var currentPlayers: [Player] = []
+    @Published var isNewGameStarting: Bool = false
     
     private var generatedNumbers: [Int] = []
     private var currentIndex: Int = 0
     private var liveGameNumbers: [Int] = [] // Track numbers as they appear during live gameplay
     private var winnerOrder: [Int] = [] // Track order of numbers that reached target repetitions
-    private var numberCounts: [Int: Int] = [:] // Track current count for each number
+    @Published var numberCounts: [Int: Int] = [:] // Track current count for each number
     
     var inputsValid: Bool {
         guard let start = Int(startNumber),
@@ -67,8 +71,10 @@ class RandomNumberViewModel: ObservableObject {
     }
     
     var numberStatistics: [(number: Int, count: Int)] {
-        guard let winners = Int(winnersCount),
-              let targetReps = Int(repetitions) else { return [] }
+        guard let winners = Int(winnersCount) else { return [] }
+        
+        // Use repetitions from current game mode if available, otherwise fall back to input field
+        let targetReps = currentGameMode?.repetitions ?? Int(repetitions) ?? 1
         
         // Winners are numbers that reached the target repetition count, in order of achievement
         let winnerNumbers = Array(winnerOrder.prefix(winners))
@@ -83,10 +89,12 @@ class RandomNumberViewModel: ObservableObject {
         guard inputsValid else { return }
         
         guard let start = Int(startNumber),
-              let end = Int(endNumber),
-              let reps = Int(repetitions) else {
+              let end = Int(endNumber) else {
             return
         }
+        
+        // Use repetitions from current game mode if available, otherwise fall back to input field
+        let reps = currentGameMode?.repetitions ?? Int(repetitions) ?? 1
         
         isGenerating = true
         generatedNumbers.removeAll()
@@ -112,7 +120,14 @@ class RandomNumberViewModel: ObservableObject {
             // Track first number in live game
             trackLiveNumber(currentNumber)
             
-            showingResult = true
+            // Only set showingResult = true if we're not already in a game session
+            // This prevents navigation conflicts when starting a new game from ResultView
+            if !showingResult {
+                showingResult = true
+            } else {
+                // If we're already in ResultView, signal that a new game is starting
+                isNewGameStarting = true
+            }
         }
         
         isGenerating = false
@@ -130,6 +145,12 @@ class RandomNumberViewModel: ObservableObject {
         
         // Track this number in the live game
         trackLiveNumber(currentNumber)
+        
+        // Check if we have enough winners and should stop the game
+        if shouldStopGame() {
+            showingCongrats = true
+            return
+        }
     }
     
     func reset() {
@@ -146,6 +167,8 @@ class RandomNumberViewModel: ObservableObject {
         showingResult = false
         showingCongrats = false
         isGenerating = false
+        isNewGameStarting = false
+        currentPlayers.removeAll()
     }
     
     func goHome() {
@@ -225,7 +248,8 @@ class RandomNumberViewModel: ObservableObject {
     }
     
     private func trackLiveNumber(_ number: Int) {
-        guard let targetReps = Int(repetitions) else { return }
+        // Use repetitions from current game mode if available, otherwise fall back to input field
+        let targetReps = currentGameMode?.repetitions ?? Int(repetitions) ?? 1
         
         // Always add to live game numbers
         liveGameNumbers.append(number)
@@ -240,5 +264,13 @@ class RandomNumberViewModel: ObservableObject {
                 winnerOrder.append(number)
             }
         }
+    }
+    
+    func shouldStopGame() -> Bool {
+        // Get the required number of winners from the game mode
+        let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
+        
+        // Check if we have enough winners
+        return winnerOrder.count >= requiredWinners
     }
 } 

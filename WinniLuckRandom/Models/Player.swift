@@ -11,15 +11,18 @@ import CloudKit
 struct Player: Identifiable, Codable, Hashable {
     let id: UUID
     let firstName: String
+    var selectedNumber: Int? // Optional selected number for manual assignment
     
-    init(firstName: String) {
+    init(firstName: String, selectedNumber: Int? = nil) {
         self.id = UUID()
         self.firstName = firstName
+        self.selectedNumber = selectedNumber
     }
     
-    init(id: UUID, firstName: String) {
+    init(id: UUID, firstName: String, selectedNumber: Int? = nil) {
         self.id = id
         self.firstName = firstName
+        self.selectedNumber = selectedNumber
     }
 }
 
@@ -31,6 +34,9 @@ extension Player {
         let record = CKRecord(recordType: "Player")
         record["id"] = id.uuidString
         record["firstName"] = firstName
+        if let number = selectedNumber {
+            record["selectedNumber"] = number
+        }
         return record
     }
     
@@ -44,6 +50,7 @@ extension Player {
         
         self.id = id
         self.firstName = firstName
+        self.selectedNumber = record["selectedNumber"] as? Int
     }
 }
 
@@ -57,5 +64,14 @@ extension Player {
     /// Check if name is valid (not empty or whitespace)
     var isValid: Bool {
         return !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    /// Display text for selected number
+    var numberDisplayText: String {
+        if let number = selectedNumber {
+            return "\(number)"
+        } else {
+            return NSLocalizedString("select_number", comment: "Select number placeholder")
+        }
     }
 } 

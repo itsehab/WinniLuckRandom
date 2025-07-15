@@ -6,218 +6,240 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct SettingsView: View {
     @ObservedObject var settings: SettingsModel
-    @Environment(\.dismiss) var dismiss
-    @State private var showingResetAlert = false
-    @State private var showingResetSuccess = false
-    @State private var showingResetAllAlert = false
+    @StateObject private var storageManager = StorageManager.shared
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var selectedPhoto: PhotosPickerItem?
     @State private var showingImagePicker = false
-    @State private var tempBackgroundImage: UIImage?
+    @State private var showingResetAlert = false
+    @State private var showingMigrationAlert = false
+    @State private var isMigrating = false
     
     var body: some View {
         NavigationView {
-            ZStack {
-                // Background
-                BackgroundView(image: settings.backgroundImage)
+            Form {
+                // Storage Settings Section
+                storageSection
                 
-                ScrollView {
-                    VStack(spacing: 30) {
-                        // Title
-                        VStack(spacing: 10) {
-                            Image(systemName: "gear.circle.fill")
-                                .font(.system(size: 50))
+                // Sound Settings Section
+                Section(header: Text("Sound Settings")) {
+                    Toggle("Voice Enabled", isOn: $settings.voiceEnabled)
+                        .onChange(of: settings.voiceEnabled) { _, _ in
+                            settings.saveVoiceSetting()
+                        }
+                            }
+                            
+                // Background Settings Section
+                Section(header: Text("Background Settings")) {
+                    HStack {
+                        Text("Current Background")
+                        Spacer()
+                        
+                        if settings.backgroundImage != nil {
+                            HStack {
+                                Image(systemName: "photo")
+                                    .foregroundColor(.green)
+                                Text("Custom Image")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            HStack {
+                                Image(systemName: "paintbrush")
+                                    .foregroundColor(.blue)
+                                Text("Default Gradient")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        HStack {
+                            Image(systemName: "photo.badge.plus")
                                 .foregroundColor(.blue)
-                                .shadow(color: .blue.opacity(0.5), radius: 5, x: 2, y: 2)
+                            Text("Select Background Image")
+                                }
+                            }
                             
-                            Text(NSLocalizedString("settings", comment: ""))
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
-                                .foregroundColor(.primary)
+                    if settings.backgroundImage != nil {
+                        Button("Reset to Default Background") {
+                            showingResetAlert = true
                         }
-                        .padding(.top, 20)
-                        
-                        // Settings options
-                        VStack(spacing: 20) {
-                            // Voice toggle
-                            SettingsRow(
-                                icon: "speaker.wave.2.fill",
-                                title: NSLocalizedString("voice_enabled", comment: ""),
-                                iconColor: .green
-                            ) {
-                                Toggle("", isOn: $settings.voiceEnabled)
-                                    .toggleStyle(SwitchToggleStyle(tint: .green))
-                            }
-                            
-                            // Background image selection
-                            SettingsRow(
-                                icon: "photo.badge.plus",
-                                title: "Select Background",
-                                iconColor: .blue
-                            ) {
-                                Button(action: {
-                                    showingImagePicker = true
-                                }) {
-                                    Text("Choose")
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [.blue, .purple]),
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .cornerRadius(10)
-                                }
-                            }
-                            
-                            // Background reset
-                            SettingsRow(
-                                icon: "photo.fill",
-                                title: NSLocalizedString("reset_background", comment: ""),
-                                iconColor: .orange
-                            ) {
-                                Button(action: {
-                                    showingResetAlert = true
-                                }) {
-                                    Text("Reset")
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [.orange, .red]),
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .cornerRadius(10)
-                                }
-                                .disabled(!settings.backgroundImageSelected)
-                            }
-                            
-                            // Reset all settings
-                            SettingsRow(
-                                icon: "arrow.clockwise.circle.fill",
-                                title: "Reset All Settings",
-                                iconColor: .red
-                            ) {
-                                Button(action: {
-                                    showingResetAllAlert = true
-                                }) {
-                                    Text("Reset All")
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [.red, .pink]),
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .cornerRadius(10)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        Spacer(minLength: 50)
+                        .foregroundColor(.red)
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
                         dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text(NSLocalizedString("back", comment: ""))
-                        }
-                        .foregroundColor(.blue)
                     }
+                }
+            }
+        }
+        .onChange(of: selectedPhoto) { _, newValue in
+            if let newValue = newValue {
+                loadSelectedImage(newValue)
                 }
             }
             .alert("Reset Background", isPresented: $showingResetAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset", role: .destructive) {
                     settings.resetBackground()
-                    showingResetSuccess = true
                 }
             } message: {
                 Text("Are you sure you want to reset the background to default?")
             }
-            .alert(NSLocalizedString("background_reset", comment: ""), isPresented: $showingResetSuccess) {
-                Button("OK", role: .cancel) { }
-            }
-            .alert("Reset All Settings", isPresented: $showingResetAllAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Reset All", role: .destructive) {
-                    settings.resetAllSettings()
+        .alert("Migrate to CloudKit", isPresented: $showingMigrationAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Migrate") {
+                Task {
+                    isMigrating = true
+                    do {
+                        try await storageManager.migrateLocalDataToCloudKit()
+                        // Migration completed successfully
+                        await MainActor.run {
+                            storageManager.switchToCloudKit()
+                        }
+                    } catch {
+                        print("Migration failed: \(error)")
+                    }
+                    isMigrating = false
+                }
                 }
             } message: {
-                Text("This will reset all app settings including background image and voice settings. This action cannot be undone.")
+            Text("This will copy all your local data to CloudKit. Your local data will remain unchanged.")
+        }
+    }
+    
+    // MARK: - Storage Section
+    
+    @ViewBuilder
+    private var storageSection: some View {
+        Section(header: Text("💾 Storage Settings")) {
+            HStack {
+                Image(systemName: storageManager.currentStorageType == .local ? "iphone" : "icloud")
+                    .foregroundColor(storageManager.currentStorageType == .local ? .blue : .green)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Current Storage")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    
+                    Text(storageManager.storageDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if storageManager.isOnline {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
             }
-            .sheet(isPresented: $showingImagePicker) {
-                ImagePicker(selectedImage: $tempBackgroundImage)
             }
-            .onChange(of: tempBackgroundImage) { _, newImage in
-                if let image = newImage {
-                    settings.saveBackgroundImage(image)
-                    tempBackgroundImage = nil
+            
+                        // CloudKit Switch (only show if CloudKit is available)
+            if canUseCloudKit {
+                Button("Switch to CloudKit") {
+                    storageManager.switchToCloudKit()
+                }
+                .disabled(isMigrating)
+                
+                // Migration button (only show when on local storage)
+                if storageManager.currentStorageType == .local {
+                    Button("Migrate Data to CloudKit") {
+                        showingMigrationAlert = true
+                    }
+                    .disabled(isMigrating)
+                }
+            }
+            
+            // Local Storage Switch
+            Button("Switch to Local Storage") {
+                storageManager.switchToLocalStorage()
+            }
+            .disabled(storageManager.currentStorageType == .local || isMigrating)
+            
+            // Storage Info
+            if storageManager.currentStorageType == .local {
+                NavigationLink("Storage Details") {
+                    StorageInfoView()
+                }
+            }
+            
+            if isMigrating {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Migrating data...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var canUseCloudKit: Bool {
+        // Add logic here to check if CloudKit is available
+        // For now, always return true - you can add proper CloudKit availability check later
+        return true
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func loadSelectedImage(_ item: PhotosPickerItem) {
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data) {
+                await MainActor.run {
+                    settings.saveBackgroundImage(uiImage)
                 }
             }
         }
     }
 }
 
-struct SettingsRow<Content: View>: View {
-    let icon: String
-    let title: String
-    let iconColor: Color
-    let content: Content
-    
-    init(icon: String, title: String, iconColor: Color, @ViewBuilder content: () -> Content) {
-        self.icon = icon
-        self.title = title
-        self.iconColor = iconColor
-        self.content = content()
-    }
+// MARK: - Storage Info View
+
+struct StorageInfoView: View {
+    @StateObject private var storageManager = StorageManager.shared
     
     var body: some View {
-        HStack(spacing: 15) {
-            // Icon
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(iconColor)
-                .frame(width: 30, height: 30)
-            
-            // Title
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.primary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(storageManager.getStorageInfo())
+                    .font(.system(.body, design: .monospaced))
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                
+                if storageManager.currentStorageType == .local {
+                    Button("Clear All Local Data") {
+                        _ = LocalStorageService.shared.clearAllData()
+                    }
+                    .foregroundColor(.red)
+                    .padding()
+                }
             
             Spacer()
-            
-            // Content
-            content
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 15)
-        .background(
-            RoundedRectangle(cornerRadius: 15)
-                .fill(Color(.systemBackground))
-                .shadow(color: .gray.opacity(0.2), radius: 5, x: 0, y: 2)
-        )
+            .padding()
+        }
+        .navigationTitle("Storage Details")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -19,7 +19,6 @@ class PlayerEntryViewModel: ObservableObject {
     
     // MARK: - Private Properties
     private let cloudKitService = CloudKitService.shared
-    private let randomNumberViewModel: RandomNumberViewModel
     
     // MARK: - Public Properties
     let selectedGameMode: GameMode
@@ -38,12 +37,8 @@ class PlayerEntryViewModel: ObservableObject {
     }
     
     // MARK: - Initialization
-    init(gameMode: GameMode, randomNumberViewModel: RandomNumberViewModel) {
+    init(gameMode: GameMode) {
         self.selectedGameMode = gameMode
-        self.randomNumberViewModel = randomNumberViewModel
-        
-        // Configure the random number view model for this game mode
-        setupRandomNumberViewModel()
     }
     
     // MARK: - Player Management
@@ -94,9 +89,6 @@ class PlayerEntryViewModel: ObservableObject {
         // Configure the game session
         configureGameSession()
         
-        // Start the number generation
-        randomNumberViewModel.generateRandomNumbers()
-        
         // Show the game view
         showingGameView = true
         
@@ -104,16 +96,6 @@ class PlayerEntryViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
-    private func setupRandomNumberViewModel() {
-        // The game mode might have specific number ranges, but we'll use the default
-        // range from the existing settings. In a future version, we could extend
-        // GameMode to include custom number ranges.
-        
-        // For now, use the existing start/end numbers from RandomNumberViewModel
-        // but ensure the winners count doesn't exceed the number of players
-        let maxWinners = min(Int(randomNumberViewModel.winnersCount) ?? 3, players.count)
-        randomNumberViewModel.winnersCount = String(maxWinners)
-    }
     
     private func configureGameSession() {
         // This method prepares the game session data that will be saved
@@ -156,17 +138,82 @@ class PlayerEntryViewModel: ObservableObject {
     
     // MARK: - Player Assignment
     func getAssignedNumber(for player: Player) -> Int? {
-        guard let index = players.firstIndex(where: { $0.id == player.id }) else {
-            return nil
-        }
-        return index + 1
+        return player.selectedNumber
     }
     
     func getPlayerForNumber(_ number: Int) -> Player? {
-        guard number > 0 && number <= players.count else {
-            return nil
+        return players.first { $0.selectedNumber == number }
+    }
+    
+    // MARK: - Manual Number Selection
+    func assignNumber(_ number: Int, to player: Player) {
+        guard let index = players.firstIndex(where: { $0.id == player.id }) else { return }
+        
+        // Check if number is already taken by another player
+        if players.contains(where: { $0.selectedNumber == number && $0.id != player.id }) {
+            errorMessage = String(format: NSLocalizedString("number_already_taken", comment: ""), number)
+            return
         }
-        return players[number - 1]
+        
+        // Check if number is within valid range
+        guard number >= 1 && number <= selectedGameMode.maxPlayers else {
+            errorMessage = String(format: NSLocalizedString("number_out_of_range", comment: ""), 1, selectedGameMode.maxPlayers)
+            return
+        }
+        
+        // Create updated player with selected number
+        let updatedPlayer = Player(id: player.id, firstName: player.firstName, selectedNumber: number)
+        players[index] = updatedPlayer
+        
+        clearErrorMessage()
+        
+        // Save updated player to CloudKit
+        Task {
+            await savePlayer(updatedPlayer)
+        }
+    }
+    
+    func clearNumber(for player: Player) {
+        guard let index = players.firstIndex(where: { $0.id == player.id }) else { return }
+        
+        let updatedPlayer = Player(id: player.id, firstName: player.firstName, selectedNumber: nil)
+        players[index] = updatedPlayer
+        
+        // Save updated player to CloudKit
+        Task {
+            await savePlayer(updatedPlayer)
+        }
+    }
+    
+    func isNumberAvailable(_ number: Int) -> Bool {
+        return !players.contains { $0.selectedNumber == number }
+    }
+    
+    func getAvailableNumbers() -> [Int] {
+        let allNumbers = Array(1...selectedGameMode.maxPlayers)
+        let takenNumbers = Set(players.compactMap { $0.selectedNumber })
+        return allNumbers.filter { !takenNumbers.contains($0) }
+    }
+    
+    func hasAllPlayersSelectedNumbers() -> Bool {
+        return players.allSatisfy { $0.selectedNumber != nil }
+    }
+    
+    func getPlayersWithoutNumbers() -> [Player] {
+        return players.filter { $0.selectedNumber == nil }
+    }
+    
+    // MARK: - Convenience Methods
+    func updatePlayerNumber(_ player: Player, to number: Int) {
+        assignNumber(number, to: player)
+    }
+    
+    func clearPlayerNumber(_ player: Player) {
+        clearNumber(for: player)
+    }
+    
+    func isNumberSelected(_ number: Int) -> Bool {
+        return players.contains { $0.selectedNumber == number }
     }
     
     // MARK: - Financial Calculations
@@ -175,27 +222,65 @@ class PlayerEntryViewModel: ObservableObject {
     }
     
     func calculateExpectedProfit() -> Decimal {
-        return selectedGameMode.calculateProfit(for: players.count)
+        // Estimate profit with 1 winner as default
+        return selectedGameMode.calculateProfit(for: players.count, winners: 1)
     }
     
     func calculatePayout() -> Decimal {
-        return selectedGameMode.calculatePayout()
+        // Calculate payout for 1 winner as default
+        return selectedGameMode.calculatePayout(for: 1)
     }
     
     // MARK: - Analytics Support
     func generateGameSession(winningNumbers: [Int], winnerPlayerIDs: [UUID]) -> GameSession {
+        let playerCount = players.count
+        let grossIncome = selectedGameMode.calculateGross(for: playerCount)
+        let actualWinners = winnerPlayerIDs.count
+        let payout = selectedGameMode.calculatePayout(for: actualWinners)
+        let profit = selectedGameMode.calculateProfit(for: playerCount, winners: actualWinners)
+        
         let session = GameSession(
+            id: UUID(),
             modeID: selectedGameMode.id,
-            startRange: Int(randomNumberViewModel.startNumber) ?? 1,
-            endRange: Int(randomNumberViewModel.endNumber) ?? 100,
-            repetitions: Int(randomNumberViewModel.repetitions) ?? 1,
-            numWinners: winningNumbers.count,
+            startRange: 1,
+            endRange: selectedGameMode.maxPlayers,
+            repetitions: selectedGameMode.repetitions,
+            numWinners: winnerPlayerIDs.count,
             playerIDs: players.map { $0.id },
             winningNumbers: winningNumbers,
             winnerIDs: winnerPlayerIDs,
-            grossIncome: calculateTotalRevenue(),
-            profit: calculateExpectedProfit(),
-            payout: calculatePayout()
+            date: Date(),
+            grossIncome: grossIncome,
+            profit: profit,
+            payout: payout
+        )
+        
+        return session
+    }
+    
+    // MARK: - Game Session Creation
+    func createGameSession() -> GameSession {
+        let playerCount = players.count
+        let grossIncome = selectedGameMode.calculateGross(for: playerCount)
+        // Start with 1 winner as default, will be updated later
+        let estimatedWinners = 1
+        let payout = selectedGameMode.calculatePayout(for: estimatedWinners)
+        let profit = selectedGameMode.calculateProfit(for: playerCount, winners: estimatedWinners)
+        
+        let session = GameSession(
+            id: UUID(),
+            modeID: selectedGameMode.id,
+            startRange: 1,
+            endRange: selectedGameMode.maxPlayers,
+            repetitions: selectedGameMode.repetitions,
+            numWinners: 0,
+            playerIDs: players.map { $0.id },
+            winningNumbers: [],
+            winnerIDs: [],
+            date: Date(),
+            grossIncome: grossIncome,
+            profit: profit,
+            payout: payout
         )
         
         return session
@@ -229,7 +314,7 @@ class PlayerEntryViewModel: ObservableObject {
         return String(format: NSLocalizedString("game_mode_summary", comment: ""), 
                       selectedGameMode.title, 
                       selectedGameMode.formattedEntryPrice,
-                      selectedGameMode.formattedPrizePool)
+                      selectedGameMode.formattedPrizePerWinner)
     }
 }
 
@@ -249,15 +334,14 @@ extension PlayerEntryViewModel {
 extension PlayerEntryViewModel {
     static func preview() -> PlayerEntryViewModel {
         let gameMode = GameMode(
-            title: "10 players / S/. 5.00 entry",
+            title: "Modo Premium",
             maxPlayers: 10,
-            entryPriceSoles: 5.00,
-            prizePoolSoles: 40.00,
-            profitPct: 0.20
+            entryPriceSoles: Decimal(5.00),
+            prizePerWinner: Decimal(30.00),
+            maxWinners: 2
         )
         
-        let randomNumberViewModel = RandomNumberViewModel()
-        let viewModel = PlayerEntryViewModel(gameMode: gameMode, randomNumberViewModel: randomNumberViewModel)
+        let viewModel = PlayerEntryViewModel(gameMode: gameMode)
         
         // Add some sample players
         let samplePlayers = [

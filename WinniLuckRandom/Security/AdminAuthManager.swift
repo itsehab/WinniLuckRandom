@@ -114,6 +114,15 @@ class AdminAuthManager: ObservableObject {
     init() {
         checkLockoutStatus()
         loadFailedAttempts()
+        setupDefaultPINIfNeeded()
+    }
+    
+    // MARK: - Default PIN Setup
+    private func setupDefaultPINIfNeeded() {
+        // Set default PIN if no PIN is configured
+        if !isPINSet() {
+            UserDefaults.standard.set("123456", forKey: adminPINKey)
+        }
     }
     
     // MARK: - Main Authentication Method

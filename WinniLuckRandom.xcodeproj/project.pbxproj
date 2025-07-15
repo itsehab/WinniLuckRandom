@@ -29,9 +29,22 @@
 		64C1F4582E22C21C0082C7C7 /* WinniLuckRandomUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WinniLuckRandomUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		643222402E2465EF00EBB378 /* Exceptions for "WinniLuckRandom" folder in "WinniLuckRandom" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 64C1F4402E22C21A0082C7C7 /* WinniLuckRandom */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		64C1F4432E22C21A0082C7C7 /* WinniLuckRandom */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				643222402E2465EF00EBB378 /* Exceptions for "WinniLuckRandom" folder in "WinniLuckRandom" target */,
+			);
 			path = WinniLuckRandom;
 			sourceTree = "<group>";
 		};
@@ -396,10 +409,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WinniLuckRandom/WinniLuckRandom.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V49DC285P8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WinniLuckRandom/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = WinniLuckRandom;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Esta aplicación necesita acceso a tu biblioteca de fotos para establecer fondos personalizados.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -425,10 +441,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WinniLuckRandom/WinniLuckRandom.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V49DC285P8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WinniLuckRandom/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = WinniLuckRandom;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Esta aplicación necesita acceso a tu biblioteca de fotos para establecer fondos personalizados.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
