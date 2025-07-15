@@ -171,9 +171,10 @@ struct DashboardView: View {
             Button(action: {
                 selectedSortOption = selectedSortOption == .profitAsc ? .profitDesc : .profitAsc
             }) {
-                Image(systemName: selectedSortOption == .profitAsc ? "arrow.up.arrow.down" : "arrow.down.arrow.up")
+                Image(systemName: selectedSortOption == .profitAsc ? "arrow.up.down" : "arrow.up.down")
                     .font(.title2)
                     .foregroundColor(.blue)
+                    .rotationEffect(.degrees(selectedSortOption == .profitAsc ? 0 : 180))
             }
             .buttonStyle(PlainButtonStyle())
         }

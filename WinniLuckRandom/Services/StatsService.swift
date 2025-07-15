@@ -19,15 +19,15 @@ enum TimeFilter: String, CaseIterable {
     var localizedTitle: String {
         switch self {
         case .day:
-            return NSLocalizedString("day", comment: "")
+            return "Día"
         case .week:
-            return NSLocalizedString("week", comment: "")
+            return "Semana"
         case .month:
-            return NSLocalizedString("month", comment: "")
+            return "Mes"
         case .year:
-            return NSLocalizedString("year", comment: "")
+            return "Año"
         case .custom:
-            return NSLocalizedString("custom", comment: "")
+            return "Personalizado"
         }
     }
 }
