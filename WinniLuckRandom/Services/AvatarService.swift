@@ -8,29 +8,24 @@
 import Foundation
 import SwiftUI
 
+enum DiceBear {
+    static func avatarURL(style: String = "adventurer", seed: String) -> URL {
+        // DiceBear v8 syntax with PNG format
+        let encodedSeed = seed.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "seed"
+        let urlString = "https://api.dicebear.com/8.x/\(style)/png?seed=\(encodedSeed)&backgroundColor=fde047,f97316,37d19c"
+        return URL(string: urlString)!
+    }
+}
+
 class AvatarService {
     
     // MARK: - Avatar Generation
     
     /// Generate a DiceBear avatar URL using a seed
     static func generateAvatarURL(seed: String) -> String {
-        let baseURL = "https://api.dicebear.com/9.x/avataaars/svg"
-        
-        // Use the seed to create a deterministic avatar
-        let encodedSeed = seed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? seed
-        
-        // Configure avatar style parameters for fun, colorful avatars
-        let parameters = [
-            "seed": encodedSeed,
-            "backgroundColor": ["b6e3f4", "c0aede", "d1d4f9", "ffd93d", "ffdfbf"].randomElement() ?? "b6e3f4",
-            "size": "64"
-        ]
-        
-        let queryString = parameters.compactMap { key, value in
-            return "\(key)=\(value)"
-        }.joined(separator: "&")
-        
-        return "\(baseURL)?\(queryString)"
+        let url = DiceBear.avatarURL(style: "adventurer", seed: seed)
+        print("Avatar URL → \(url.absoluteString)")
+        return url.absoluteString
     }
     
     /// Generate a new random avatar URL
@@ -61,19 +56,49 @@ struct AvatarImageView: View {
     }
     
     var body: some View {
-        AsyncImage(url: URL(string: avatarURL)) { image in
-            image
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        } placeholder: {
-            // Placeholder while loading
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .overlay(
-                    Image(systemName: "person.circle.fill")
-                        .foregroundColor(.gray)
-                        .font(.system(size: size * 0.6))
-                )
+        AsyncImage(url: URL(string: avatarURL)) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            case .failure(let error):
+                // Show error and fallback
+                Circle()
+                    .fill(Color.red.opacity(0.3))
+                    .overlay(
+                        VStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.red)
+                                .font(.system(size: size * 0.4))
+                            Text("Error")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
+                    )
+                    .onAppear {
+                        print("Avatar loading error: \(error)")
+                        print("Avatar URL: \(avatarURL)")
+                    }
+            case .empty:
+                // Placeholder while loading
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .overlay(
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: size * 0.6))
+                    )
+            @unknown default:
+                // Fallback
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .overlay(
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: size * 0.6))
+                    )
+            }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
@@ -82,6 +107,9 @@ struct AvatarImageView: View {
                 .stroke(Color.white, lineWidth: 2)
         )
         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        .onAppear {
+            print("Avatar URL for display → \(avatarURL)")
+        }
     }
 }
 

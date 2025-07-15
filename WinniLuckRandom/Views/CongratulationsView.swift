@@ -12,11 +12,15 @@ struct CongratulationsView: View {
     let gameMode: GameMode
     let onPlayAgain: () -> Void
     let onGoHome: () -> Void
+    let onStartNewGame: (GameMode, [Player]) -> Void
     @ObservedObject var settings: SettingsModel
     
     @State private var showConfetti = false
     @State private var animateWinners = false
     @State private var celebrationScale: CGFloat = 0.8
+    @StateObject private var gameModesViewModel = GameModesViewModel.shared
+    @State private var selectedGameMode: GameMode?
+    @State private var showingPlayerEntry = false
     
     var body: some View {
         ZStack {
@@ -38,8 +42,8 @@ struct CongratulationsView: View {
                 
                 Spacer()
                 
-                // Action buttons
-                buttonSection
+                // Game mode selection and start button
+                gameSelectionSection
             }
             .padding(.horizontal, 20)
             .padding(.top, 50)
@@ -47,6 +51,19 @@ struct CongratulationsView: View {
         .navigationBarHidden(true)
         .onAppear {
             startCelebration()
+            // Load game modes when the view appears
+            Task {
+                await gameModesViewModel.loadGameModesIfNeeded()
+            }
+        }
+        .sheet(isPresented: $showingPlayerEntry) {
+            if let selectedMode = selectedGameMode {
+                PlayerEntryView(gameMode: selectedMode) { players in
+                    showingPlayerEntry = false
+                    // Start new game with the selected mode and players
+                    onStartNewGame(selectedMode, players)
+                }
+            }
         }
     }
     
@@ -102,39 +119,73 @@ struct CongratulationsView: View {
         }
     }
     
-    // MARK: - Button Section
+    // MARK: - Game Selection Section
     
-    private var buttonSection: some View {
-        HStack(spacing: 16) {
-            // Play Again button
-            Button(action: onPlayAgain) {
-                HStack {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.title2)
-                    Text("Jugar Otra Vez")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+    private var gameSelectionSection: some View {
+        VStack(spacing: 20) {
+            // Game mode dropdown
+            Menu {
+                ForEach(gameModesViewModel.gameModes, id: \.id) { mode in
+                    Button(action: {
+                        selectedGameMode = mode
+                    }) {
+                        HStack {
+                            Text(mode.title)
+                            Spacer()
+                            Text(mode.formattedEntryPrice)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedGameMode?.title ?? "Seleccionar Modo de Juego")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        if let mode = selectedGameMode {
+                            Text("Entrada \(mode.formattedEntryPrice)")
+                                .font(.subheadline)
+                                .opacity(0.8)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
+                .padding(.horizontal, 16)
                 .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [.blue, .purple]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 )
-                .cornerRadius(16)
-                .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
             }
             
-            // Home button
-            Button(action: onGoHome) {
-                HStack {
-                    Image(systemName: "house.fill")
-                        .font(.title2)
-                    Text("Inicio")
+            // Start game button
+            Button(action: {
+                if let selectedMode = selectedGameMode {
+                    showingPlayerEntry = true
+                }
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Empezar Juego")
                         .font(.headline)
                         .fontWeight(.semibold)
                 }
@@ -142,14 +193,42 @@ struct CongratulationsView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
                 .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: selectedGameMode != nil ? [.green, Color(red: 0.0, green: 0.7, blue: 0.3)] : [.gray, .gray]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 )
-                .cornerRadius(16)
-                .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
+            }
+            .disabled(selectedGameMode == nil)
+            .opacity(selectedGameMode != nil ? 1.0 : 0.6)
+            
+            // Home button (secondary)
+            Button(action: {
+                onGoHome()
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Inicio")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.black.opacity(0.3))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                )
             }
         }
         .padding(.bottom, 34)
@@ -343,6 +422,7 @@ struct WinnerData: Identifiable {
         gameMode: gameMode,
         onPlayAgain: {},
         onGoHome: {},
+        onStartNewGame: { _, _ in },
         settings: SettingsModel()
     )
 } 

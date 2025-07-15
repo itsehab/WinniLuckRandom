@@ -383,21 +383,24 @@ class CloudKitService: StorageServiceProtocol {
                 maxPlayers: 5,
                 entryPriceSoles: 2.00,
                 prizeTiers: [6.00], // 1st place: S/. 6.00
-                maxWinners: 1
+                maxWinners: 1,
+                repetitions: 3
             ),
             GameMode(
                 title: "Standard Game",
                 maxPlayers: 10,
                 entryPriceSoles: 5.00,
                 prizeTiers: [25.00, 15.00], // 1st: S/. 25.00, 2nd: S/. 15.00
-                maxWinners: 2
+                maxWinners: 2,
+                repetitions: 3
             ),
             GameMode(
                 title: "Premium Game",
                 maxPlayers: 20,
                 entryPriceSoles: 10.00,
                 prizeTiers: [80.00, 60.00, 40.00], // 1st: S/. 80.00, 2nd: S/. 60.00, 3rd: S/. 40.00
-                maxWinners: 3
+                maxWinners: 3,
+                repetitions: 3
             )
         ]
         

@@ -28,6 +28,7 @@ class RandomNumberViewModel: ObservableObject {
     @Published var isNewGameStarting: Bool = false
     @Published var gameWinners: [WinnerData] = []
     @Published var showingWinners: Bool = false
+    @Published var isCompletingRace: Bool = false
     
     private var generatedNumbers: [Int] = []
     private var currentIndex: Int = 0
@@ -148,11 +149,7 @@ class RandomNumberViewModel: ObservableObject {
         // Track this number in the live game
         trackLiveNumber(currentNumber)
         
-        // Check if we have enough winners and should stop the game
-        if shouldStopGame() {
-            finalizeGame()
-            return
-        }
+        // Note: shouldStopGame() check is now handled in ResultView AFTER the number is displayed
     }
     
     func reset() {
@@ -171,6 +168,7 @@ class RandomNumberViewModel: ObservableObject {
         showingWinners = false
         isGenerating = false
         isNewGameStarting = false
+        isCompletingRace = false
         currentPlayers.removeAll()
         gameWinners.removeAll()
     }
@@ -273,10 +271,22 @@ class RandomNumberViewModel: ObservableObject {
     func shouldStopGame() -> Bool {
         // Get the required number of winners from the game mode
         let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
+        let targetReps = currentGameMode?.repetitions ?? Int(repetitions) ?? 1
         
-        // Check if we have enough winners
-        return winnerOrder.count >= requiredWinners
+        // Check if we have enough winners who have reached the finish line (target repetitions)
+        let winnersAtFinishLine = winnerOrder.filter { number in
+            numberCounts[number] ?? 0 >= targetReps
+        }
+        
+        // Stop the game immediately when we have enough winners at the finish line
+        if winnersAtFinishLine.count >= requiredWinners {
+            isCompletingRace = true
+            return true
+        }
+        
+        return false
     }
+
     
     func finalizeGame() {
         // Generate winner data

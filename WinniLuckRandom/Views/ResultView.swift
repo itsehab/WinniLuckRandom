@@ -55,7 +55,7 @@ struct ResultView: View {
                             }
                         }
                         
-                        Spacer()
+                                Spacer()
                         
                         // X Button - top right corner
                         Button(action: {
@@ -91,7 +91,8 @@ struct ResultView: View {
                             numberCounts: viewModel.numberCounts,
                             targetRepetitions: viewModel.currentGameMode?.repetitions ?? Int(viewModel.repetitions) ?? 1,
                             numbersDrawn: viewModel.currentRepetition,
-                            totalNumbers: viewModel.totalRepetitions
+                            totalNumbers: viewModel.totalRepetitions,
+                            isCompletingRace: viewModel.isCompletingRace
                         )
                         
                         // Main gold coin with number - Centered
@@ -158,7 +159,7 @@ struct ResultView: View {
                     .accessibility(value: Text("\(viewModel.currentNumber)"))
                     }
                     
-                    Spacer()
+                            Spacer()
                     
                     // WinniLuck Branding with smooth scaling animation
                     Text("WinniLuck")
@@ -216,9 +217,6 @@ struct ResultView: View {
             stopTimer()
             stopRandomizationTimer()
         }
-        .fullScreenCover(isPresented: $viewModel.showingCongrats) {
-            CongratsView(viewModel: viewModel, settings: settings, parentDismiss: dismiss)
-        }
         .fullScreenCover(isPresented: $viewModel.showingWinners) {
             CongratulationsView(
                 winners: viewModel.gameWinners,
@@ -229,6 +227,48 @@ struct ResultView: View {
                 onGoHome: {
                     viewModel.goHome()
                     dismiss()
+                },
+                onStartNewGame: { gameMode, players in
+                    // Create a new game session with the selected mode and players
+                    let playerCount = players.count
+                    let grossIncome = gameMode.calculateGross(for: playerCount)
+                    let estimatedWinners = 1
+                    let payout = gameMode.calculatePayout(for: estimatedWinners)
+                    let profit = gameMode.calculateProfit(for: playerCount, winners: estimatedWinners)
+                    
+                    let newGameSession = GameSession(
+                        id: UUID(),
+                        modeID: gameMode.id,
+                        startRange: 1,
+                        endRange: gameMode.maxPlayers,
+                        repetitions: gameMode.repetitions,
+                        numWinners: estimatedWinners,
+                        playerIDs: players.map { $0.id },
+                        winningNumbers: [],
+                        winnerIDs: [],
+                        date: Date(),
+                        grossIncome: grossIncome,
+                        profit: profit,
+                        payout: payout
+                    )
+                    
+                    // Update the view model with the new game
+                    viewModel.currentGameSession = newGameSession
+                    viewModel.currentGameMode = gameMode
+                    viewModel.currentPlayers = players
+                    viewModel.startNumber = "1"
+                    viewModel.endNumber = "\(gameMode.maxPlayers)"
+                    
+                    // Reset game state
+                    viewModel.numbers = []
+                    viewModel.currentNumber = 0
+                    viewModel.currentRepetition = 0
+                    viewModel.totalRepetitions = 1
+                    viewModel.isGenerating = false
+                    viewModel.showingWinners = false
+                    
+                    // Generate new random numbers and start the game
+                    viewModel.generateRandomNumbers()
                 },
                 settings: settings
             )
@@ -287,12 +327,13 @@ struct ResultView: View {
                 }
             }
             
-            // Check if the game should stop after this number
+            // Check if we have enough winners at the finish line after this number
             if viewModel.shouldStopGame() {
                 stopTimer()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    viewModel.showingCongrats = true
-                }
+                // Stop any ongoing speech immediately
+                speechHelper.stopSpeaking()
+                // Start the completion animation - winners have reached finish line
+                startCompletionAnimation()
             }
         }
     }
@@ -301,16 +342,19 @@ struct ResultView: View {
         // Start timer after initial entrance animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-                // Check if we should stop the game due to having enough winners
+                // Check if we have enough winners at the finish line
                 if viewModel.shouldStopGame() {
                     stopTimer()
-                    viewModel.finalizeGame()
+                    speechHelper.stopSpeaking()
+                    // Start the completion animation - winners have reached finish line
+                    startCompletionAnimation()
                 } else if viewModel.hasNextNumber {
                     nextNumber()
                 } else {
                     stopTimer()
-                    // Trigger congratulations screen
-                    viewModel.finalizeGame()
+                    speechHelper.stopSpeaking()
+                    // Start the completion animation when we naturally reach the end
+                    startCompletionAnimation()
                 }
             }
         }
@@ -376,11 +420,11 @@ struct ResultView: View {
                 }
             }
             
-            // Check if the game should stop immediately (e.g., if first number is already a winner)
+            // Check if we have enough winners at the finish line immediately
             if viewModel.shouldStopGame() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    viewModel.showingCongrats = true
-                }
+                speechHelper.stopSpeaking()
+                // Start the completion animation - winners have reached finish line
+                startCompletionAnimation()
             }
         }
     }
@@ -394,331 +438,19 @@ struct ResultView: View {
         }
     }
     
+    private func startCompletionAnimation() {
+        // Give 1.5 seconds to see the winners at the finish line and celebrate
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            viewModel.finalizeGame()
+        }
+    }
+    
     // MARK: - Helper Methods
     
     private func getPlayerForNumber(_ number: Int) -> Player? {
         // Use the current players directly from the viewModel
         return viewModel.currentPlayers.first { player in
             player.selectedNumber == number
-        }
-    }
-}
-
-struct CongratsView: View {
-    @ObservedObject var viewModel: RandomNumberViewModel
-    @ObservedObject var settings: SettingsModel
-    let parentDismiss: DismissAction
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var gameModesViewModel = GameModesViewModel.shared
-    @State private var selectedNewGameMode: GameMode?
-    @State private var showingPlayerEntry = false
-    
-    var body: some View {
-        ZStack {
-            // Background
-            BackgroundView(image: settings.backgroundImage)
-            
-            // X button in top right corner
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        // Save game session and return to home
-                        saveGameSession()
-                        dismiss()
-                        parentDismiss()
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 44, height: 44)
-                                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                            
-                            Image(systemName: "xmark")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(.top, 50)
-                    .padding(.trailing, 20)
-                }
-                Spacer()
-            }
-            .zIndex(1)
-            
-            ScrollView {
-                VStack(spacing: 30) {
-                    // Congratulations message
-                    VStack(spacing: 20) {
-                        Image(systemName: "party.popper.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(.yellow)
-                            .shadow(color: .orange, radius: 10, x: 0, y: 5)
-                        
-                        Text(NSLocalizedString("congratulations", comment: ""))
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
-                    }
-                    .padding(.top, 40)
-                    
-                    // Results summary - winning numbers with player names
-                    VStack(spacing: 20) {
-                        
-                        // Grid of winning numbers with prize information
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 20) {
-                            ForEach(Array(viewModel.numberStatistics.enumerated()), id: \.element.number) { index, stat in
-                                WinningNumberCoin(
-                                    number: stat.number, 
-                                    count: stat.count,
-                                    playerName: getPlayerNameForNumber(stat.number),
-                                    position: index + 1,
-                                    prize: viewModel.currentGameMode?.getPrize(for: index + 1) ?? 0
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    
-                    // Start new game section
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text("Nuevo Juego")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        // Game mode dropdown
-                        Menu {
-                            ForEach(gameModesViewModel.gameModes, id: \.id) { gameMode in
-                    Button(action: {
-                                    selectedNewGameMode = gameMode
-                                }) {
-                                    HStack {
-                                        Text(gameMode.title)
-                                        Spacer()
-                                        Text(gameMode.formattedEntryPrice)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "gamecontroller.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(selectedNewGameMode?.title ?? NSLocalizedString("select_game_mode", comment: ""))
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                    
-                                    if let gameMode = selectedNewGameMode {
-                                        Text("Entrada \(gameMode.formattedEntryPrice)")
-                                            .font(.subheadline)
-                                            .opacity(0.8)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .padding(.horizontal, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [.blue, .purple]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        // Start game button
-                        Button(action: {
-                            if let gameMode = selectedNewGameMode {
-                                // Save the current game session first
-                                saveGameSession()
-                                
-                                // Set the new game mode in the view model
-                                viewModel.currentGameMode = gameMode
-                                viewModel.startNumber = "1"
-                                viewModel.endNumber = "\(gameMode.maxPlayers)"
-                                
-                                // Show player entry
-                                showingPlayerEntry = true
-                        }
-                    }) {
-                        HStack(spacing: 12) {
-                                Image(systemName: "play.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                Text("Empezar")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    LinearGradient(
-                                            gradient: Gradient(colors: selectedNewGameMode != nil ? [.green, Color(red: 0.0, green: 0.7, blue: 0.3)] : [.gray, .gray]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                        )
-                    }
-                        .disabled(selectedNewGameMode == nil)
-                        .opacity(selectedNewGameMode != nil ? 1.0 : 0.6)
-                    .padding(.horizontal, 16)
-                    }
-                    .padding(.bottom, 40)
-                }
-            }
-        }
-        .infinityConfetti(isActive: true)
-        .onAppear {
-            // Load game modes when the view appears
-            Task {
-                await gameModesViewModel.loadGameModesIfNeeded()
-            }
-        }
-        .sheet(isPresented: $showingPlayerEntry) {
-            if let gameMode = selectedNewGameMode {
-                PlayerEntryView(gameMode: gameMode) { players in
-                    showingPlayerEntry = false
-                    startNewGame(with: players, gameMode: gameMode)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func getPlayerNameForNumber(_ number: Int) -> String? {
-        // Use the current players directly from the viewModel
-        return viewModel.currentPlayers.first { player in
-            player.selectedNumber == number
-        }?.firstName
-    }
-    
-    private func startNewGame(with players: [Player], gameMode: GameMode) {
-        // Create a new game session
-        let playerCount = players.count
-        let grossIncome = gameMode.calculateGross(for: playerCount)
-        let estimatedWinners = 1
-        let payout = gameMode.calculatePayout(for: estimatedWinners)
-        let profit = gameMode.calculateProfit(for: playerCount, winners: estimatedWinners)
-        
-        let newGameSession = GameSession(
-            id: UUID(),
-            modeID: gameMode.id,
-            startRange: 1,
-            endRange: gameMode.maxPlayers,
-            repetitions: gameMode.repetitions,
-            numWinners: estimatedWinners,
-            playerIDs: players.map { $0.id },
-            winningNumbers: [],
-            winnerIDs: [],
-            date: Date(),
-            grossIncome: grossIncome,
-            profit: profit,
-            payout: payout
-        )
-        
-        // Reset the view model for new game
-        viewModel.currentGameSession = newGameSession
-        viewModel.currentGameMode = gameMode
-        viewModel.currentPlayers = players
-        viewModel.startNumber = "1"
-        viewModel.endNumber = "\(gameMode.maxPlayers)"
-        
-        // Reset game state
-        viewModel.numbers = []
-        viewModel.currentNumber = 0
-        viewModel.currentRepetition = 0
-        viewModel.totalRepetitions = 1
-        viewModel.isGenerating = false
-        viewModel.showingCongrats = false
-        
-        // Generate new random numbers
-        viewModel.generateRandomNumbers()
-        
-        // Add a small delay to ensure the view model state is fully updated
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // Simply dismiss the congrats view to go back to the main ResultView
-            // The ResultView will now show the new game with random number generation
-            dismiss()
-        }
-    }
-    
-    private func saveGameSession() {
-        guard let gameMode = viewModel.currentGameMode,
-              let gameSession = viewModel.currentGameSession else {
-            print("❌ Cannot save game session: Missing game mode or session")
-            return
-        }
-        
-        // Create final game session with winning numbers and winners
-        let winningNumbers = viewModel.numberStatistics.map { $0.number }
-        let winnerIDs: [UUID] = winningNumbers.compactMap { number in
-            // Find the player who selected this specific number
-            return viewModel.currentPlayers.first { player in
-                player.selectedNumber == number
-            }?.id
-        }
-        
-        // Calculate accurate final financial data
-        let actualWinners = winnerIDs.count
-        let actualPayout = gameMode.calculatePayout(for: actualWinners)
-        let actualProfit = gameMode.calculateProfit(for: viewModel.currentPlayers.count, winners: actualWinners)
-        
-        // Create new GameSession with the final results
-        let finalGameSession = GameSession(
-            id: gameSession.id, // Keep the original ID
-            modeID: gameSession.modeID,
-            startRange: gameSession.startRange,
-            endRange: gameSession.endRange,
-            repetitions: gameSession.repetitions,
-            numWinners: actualWinners, // Use actual winners count
-            playerIDs: gameSession.playerIDs,
-            winningNumbers: winningNumbers,
-            winnerIDs: winnerIDs,
-            date: gameSession.date,
-            grossIncome: gameSession.grossIncome,
-            profit: actualProfit, // Use recalculated profit
-            payout: actualPayout  // Use recalculated payout
-        )
-        
-        // Save using StorageManager (handles both local and CloudKit)
-        Task {
-            print("💾 Saving game session...")
-            let success = await StorageManager.shared.saveGameSession(finalGameSession)
-            
-            if success {
-                print("✅ Game session saved successfully")
-            } else {
-                print("❌ Failed to save game session")
-                // In a real app, you might want to show an error message to the user
-                // or queue the save for retry when connection is restored
-            }
         }
     }
 }
@@ -769,14 +501,14 @@ struct WinningNumberCoin: View {
             // Position label
             Text(positionText)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.yellow)
+                    .foregroundColor(.yellow)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
                         .fill(Color.black.opacity(0.7))
-                )
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    )
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             
             // Prize amount
             Text(formatPrize(prize))
@@ -814,9 +546,9 @@ struct WinningNumberCoin: View {
             
             // Count label
             if count > 1 {
-                Text("\(count)×")
+            Text("\(count)×")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(
@@ -919,6 +651,7 @@ struct SingleProgressView: View {
     let targetRepetitions: Int
     let numbersDrawn: Int
     let totalNumbers: Int
+    let isCompletingRace: Bool
     
     private var remainingNumbers: Int {
         max(0, totalNumbers - numbersDrawn)
@@ -953,9 +686,9 @@ struct SingleProgressView: View {
                         Text("\(numbersDrawn)")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.yellow)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(Color.black.opacity(0.7))
                             )
@@ -1055,6 +788,7 @@ struct SingleProgressView: View {
                                         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: racingNumber.isCurrentNumber)
                                 }
                                 .offset(x: calculatePositionOnBar(for: racingNumber, in: geometry.size.width - 60), y: calculateVerticalOffset(for: racingNumber))
+                                .animation(.easeInOut(duration: 0.8), value: racingNumber.count)
                                 
                                 // Count below the coin - show actual number instead of localized format
                                 Text("\(racingNumber.count)x")
@@ -1072,6 +806,7 @@ struct SingleProgressView: View {
                                     )
                                     .offset(x: calculatePositionOnBar(for: racingNumber, in: geometry.size.width - 60), y: calculateVerticalOffset(for: racingNumber) + 25)
                                     .scaleEffect(racingNumber.isCurrentNumber ? 1.1 : 1.0)
+                                    .animation(.easeInOut(duration: 0.8), value: racingNumber.count)
                                     .animation(.spring(response: 0.4, dampingFraction: 0.6), value: racingNumber.isCurrentNumber)
                             }
                         }
@@ -1089,6 +824,7 @@ struct SingleProgressView: View {
     
     private func calculatePositionOnBar(for racingNumber: RacingNumber, in availableWidth: CGFloat) -> CGFloat {
         // Position numbers on the progress bar based on their call count toward target repetitions
+        // This creates natural racing progression: 1st call → start, 2nd call → middle, target call → finish
         let progress = Double(racingNumber.count - 1) / Double(max(targetRepetitions - 1, 1))
         let basePosition = CGFloat(progress) * availableWidth - (availableWidth / 2)
         
@@ -1097,7 +833,7 @@ struct SingleProgressView: View {
         guard let index = numbersWithSameCount.firstIndex(of: racingNumber.number) else { return basePosition }
         
         // Create horizontal clustering with gentle spread
-        let clusterOffset = CGFloat(index - numbersWithSameCount.count / 2) * 4.0 // Reduced from 3 to 4 for better spacing
+        let clusterOffset = CGFloat(index - numbersWithSameCount.count / 2) * 4.0
         return basePosition + clusterOffset
     }
     

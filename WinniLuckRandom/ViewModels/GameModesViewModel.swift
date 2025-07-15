@@ -24,7 +24,7 @@ class GameModesViewModel: ObservableObject {
     @Published var maxPlayers = 10
     @Published var entryFee: Decimal = 0.50
     @Published var maxWinners = 1
-    @Published var repetitions = 1 // How many times each number needs to be called to win
+    @Published var repetitions = 3 // How many times each number needs to be called to win
     @Published var prizeTiers: [Decimal] = [1.00] // Individual prizes for each winner position
     @Published var useCustomTitle = false
     @Published var order = 0 // Order for home page display
@@ -248,7 +248,7 @@ class GameModesViewModel: ObservableObject {
         maxPlayers = 10
         entryFee = 0.50
         maxWinners = 1
-        repetitions = 1
+        repetitions = 3
         prizeTiers = [1.00]
         useCustomTitle = false
         order = 0

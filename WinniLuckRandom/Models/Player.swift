@@ -18,7 +18,7 @@ struct Player: Identifiable, Codable, Hashable {
         self.id = UUID()
         self.firstName = firstName
         self.selectedNumber = selectedNumber
-        self.avatarURL = avatarURL ?? AvatarService.generateAvatarURL(seed: UUID().uuidString)
+        self.avatarURL = avatarURL ?? AvatarService.generateAvatarURL(seed: self.id.uuidString)
     }
     
     init(id: UUID, firstName: String, selectedNumber: Int? = nil, avatarURL: String? = nil) {

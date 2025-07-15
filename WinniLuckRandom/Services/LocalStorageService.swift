@@ -120,9 +120,9 @@ class LocalStorageService: StorageServiceProtocol {
         
         // Create and save default game modes with explicit order
         let defaultModes = [
-            GameMode(title: "Juego Rápido", maxPlayers: 5, entryPriceSoles: Decimal(2.00), prizeTiers: [Decimal(6.00)], maxWinners: 1, repetitions: 1, order: 1),
-            GameMode(title: "Juego Estándar", maxPlayers: 10, entryPriceSoles: Decimal(5.00), prizeTiers: [Decimal(25.00), Decimal(15.00)], maxWinners: 2, repetitions: 1, order: 2),
-            GameMode(title: "Juego Premium", maxPlayers: 20, entryPriceSoles: Decimal(10.00), prizeTiers: [Decimal(80.00), Decimal(60.00), Decimal(40.00)], maxWinners: 3, repetitions: 1, order: 3)
+            GameMode(title: "Juego Rápido", maxPlayers: 5, entryPriceSoles: Decimal(2.00), prizeTiers: [Decimal(6.00)], maxWinners: 1, repetitions: 3, order: 1),
+            GameMode(title: "Juego Estándar", maxPlayers: 10, entryPriceSoles: Decimal(5.00), prizeTiers: [Decimal(25.00), Decimal(15.00)], maxWinners: 2, repetitions: 3, order: 2),
+            GameMode(title: "Juego Premium", maxPlayers: 20, entryPriceSoles: Decimal(10.00), prizeTiers: [Decimal(80.00), Decimal(60.00), Decimal(40.00)], maxWinners: 3, repetitions: 3, order: 3)
         ]
         
         let saveSuccess = saveData(defaultModes, to: gameModesURL)
