@@ -6,13 +6,36 @@ struct GameHistoryView: View {
     
     var body: some View {
         NavigationView {
-            contentView
-                .navigationTitle("history_title")
-                .navigationBarTitleDisplayMode(.large)
-                .toolbar {
-                    toolbarContent
+            ZStack {
+                // Beautiful gradient background matching dashboard
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.2, blue: 0.4),
+                        Color(red: 0.2, green: 0.3, blue: 0.6),
+                        Color(red: 0.1, green: 0.1, blue: 0.3)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Custom header
+                    gameHistoryHeader
+                    
+                    // Content
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            contentView
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        .padding(.bottom, 100)
+                    }
                 }
-                .searchable(text: $viewModel.searchText, prompt: "history_search_placeholder")
+            }
+            .navigationTitle("")
+            .navigationBarHidden(true)
         }
         .task {
             viewModel.loadGameSessions()
@@ -31,16 +54,175 @@ struct GameHistoryView: View {
         }
     }
     
+    // MARK: - Game History Header
+    
+    private var gameHistoryHeader: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Button(action: { dismiss() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Volver")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.white.opacity(0.2))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                Spacer()
+                
+                // Search field
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.system(size: 16))
+                    
+                    TextField("Buscar juegos...", text: $viewModel.searchText)
+                        .foregroundColor(.white)
+                        .textFieldStyle(PlainTextFieldStyle())
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.2))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .frame(maxWidth: 200)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Historial de Juegos")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("Todos tus juegos completados")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                
+                Spacer()
+                
+                // Game count
+                if !viewModel.gameSessions.isEmpty {
+                    Text("\(viewModel.gameSessions.count)")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.green.opacity(0.2))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.green.opacity(0.4), lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.bottom, 10)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.3),
+                    Color.black.opacity(0.1),
+                    Color.clear
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+    
     @ViewBuilder
     private var contentView: some View {
-        VStack {
-            if viewModel.isLoading {
-                ProgressView("history_loading")
-                    .padding()
-            } else if viewModel.gameSessions.isEmpty {
-                emptyStateView
-            } else {
-                sessionsList
+        if viewModel.isLoading {
+            modernLoadingView
+        } else if viewModel.gameSessions.isEmpty {
+            modernEmptyStateView
+        } else {
+            modernSessionsList
+        }
+    }
+    
+    private var modernLoadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            
+            Text("Cargando historial...")
+                .font(.headline)
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 200)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+    
+    private var modernEmptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 64))
+                .foregroundColor(.white.opacity(0.5))
+            
+            VStack(spacing: 8) {
+                Text("No hay juegos en el historial")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                
+                Text("Los juegos completados aparecerán aquí")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.black.opacity(0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+    
+    private var modernSessionsList: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(viewModel.gameSessions) { session in
+                ModernHistoryGameSessionCard(session: session, onDelete: {
+                    viewModel.deleteGameSession(session)
+                })
             }
         }
     }
@@ -170,6 +352,198 @@ struct GameSessionRow: View {
         formatter.currencyCode = "PEN"
         formatter.currencySymbol = "S/."
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "S/. 0.00"
+    }
+}
+
+// MARK: - Modern History Game Session Card
+
+struct ModernHistoryGameSessionCard: View {
+    let session: GameSession
+    let onDelete: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(getGameModeTitle())
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text(formatDateTime(session.date))
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                
+                Spacer()
+                
+                // Delete button
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.red)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(Color.red.opacity(0.2))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.red.opacity(0.4), lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            
+            // Game details
+            HStack(spacing: 16) {
+                HistoryDetailPill(
+                    icon: "person.3.fill",
+                    title: "Jugadores",
+                    value: "\(session.playerIDs.count)",
+                    color: .blue
+                )
+                
+                HistoryDetailPill(
+                    icon: "trophy.fill",
+                    title: "Ganadores",
+                    value: "\(session.winnerIDs.count)",
+                    color: .orange
+                )
+            }
+            
+            // Financial summary
+            HStack(spacing: 16) {
+                HistoryFinancialPill(
+                    title: "Ingreso",
+                    amount: session.grossIncome,
+                    color: .cyan
+                )
+                
+                HistoryFinancialPill(
+                    title: "Premio",
+                    amount: session.payout,
+                    color: .purple
+                )
+                
+                HistoryFinancialPill(
+                    title: "Ganancia",
+                    amount: session.profit,
+                    color: .green
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.5),
+                    Color.black.opacity(0.3)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+    }
+    
+    private func getGameModeTitle() -> String {
+        // You could implement game mode lookup here
+        return "Juego de Suerte"
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - History Detail Pill
+
+struct HistoryDetailPill: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+        }
+        .frame(minWidth: 80)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(color.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - History Financial Pill
+
+struct HistoryFinancialPill: View {
+    let title: String
+    let amount: Decimal
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(.white.opacity(0.7))
+            
+            Text(formatCurrency(amount))
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+        }
+        .frame(minWidth: 90)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(color.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+    
+    private func formatCurrency(_ amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "PEN"
+        formatter.currencySymbol = "S/."
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "S/. 0"
     }
 }
 

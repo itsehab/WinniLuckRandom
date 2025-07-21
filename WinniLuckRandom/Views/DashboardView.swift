@@ -291,33 +291,88 @@ struct DashboardView: View {
     }
     
     private var profitChartSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Ganancias Diarias (30 días)")
-                .font(.headline)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 16) {
+            // Chart header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ganancias Diarias")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("Últimos 30 días")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                
+                Spacer()
+                
+                // Chart legend
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                        Text("Ganancia")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+            }
             
+            // Chart container
             if viewModel.dailyProfitData.isEmpty {
-                Text("No hay datos disponibles")
-                    .foregroundColor(.secondary)
-                    .padding()
+                modernEmptyChartView
             } else {
-                Chart(viewModel.dailyProfitData) { data in
-                    LineMark(
-                        x: .value("Fecha", data.date),
-                        y: .value("Ganancia", data.profit)
-                    )
-                    .foregroundStyle(.blue)
-                    .symbol(.circle)
-                    .interpolationMethod(.catmullRom)
-                    
-                    AreaMark(
-                        x: .value("Fecha", data.date),
-                        y: .value("Ganancia", data.profit)
-                    )
-                    .foregroundStyle(.blue.opacity(0.2))
-                    .interpolationMethod(.catmullRom)
-                    
-                    // Add point mark for selected date
+                VStack(spacing: 0) {
+                    Chart(viewModel.dailyProfitData) { data in
+                        // Modern gradient area
+                        AreaMark(
+                            x: .value("Fecha", data.date),
+                            y: .value("Ganancia", data.profit)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.green.opacity(0.6),
+                                    Color.green.opacity(0.2),
+                                    Color.green.opacity(0.05)
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .interpolationMethod(.catmullRom)
+                        
+                        // Modern line with gradient
+                        LineMark(
+                            x: .value("Fecha", data.date),
+                            y: .value("Ganancia", data.profit)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.green, Color.cyan]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .interpolationMethod(.catmullRom)
+                        
+                        // Modern point marks
+                        PointMark(
+                            x: .value("Fecha", data.date),
+                            y: .value("Ganancia", data.profit)
+                        )
+                        .foregroundStyle(.white)
+                        .symbolSize(60)
+                        
+                        PointMark(
+                            x: .value("Fecha", data.date),
+                            y: .value("Ganancia", data.profit)
+                        )
+                        .foregroundStyle(Color.green)
+                        .symbolSize(30)
                     if let selectedDate = selectedDate,
                        let selectedData = viewModel.dailyProfitData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
                         PointMark(
@@ -334,77 +389,128 @@ struct DashboardView: View {
                         .foregroundStyle(.blue)
                         .symbolSize(50)
                     }
-                }
-                .frame(height: 200)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 7)) { value in
-                        if let date = value.as(Date.self) {
-                            AxisValueLabel {
-                                Text(date, format: .dateTime.day().month(.abbreviated))
+                    .frame(height: 200)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .day, count: 7)) { value in
+                            if let date = value.as(Date.self) {
+                                AxisValueLabel {
+                                    Text(date, format: .dateTime.day().month(.abbreviated))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .font(.caption)
+                                }
                             }
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                                .foregroundStyle(.white.opacity(0.2))
+                            AxisTick(stroke: StrokeStyle(lineWidth: 0))
                         }
-                        AxisGridLine()
-                        AxisTick()
                     }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        if let profit = value.as(Decimal.self) {
-                            AxisValueLabel {
-                                Text("S/. \(profit)")
+                    .chartYAxis {
+                        AxisMarks(position: .leading) { value in
+                            if let profit = value.as(Decimal.self) {
+                                AxisValueLabel {
+                                    Text("S/. \(profit, specifier: "%.0f")")
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .font(.caption)
+                                }
                             }
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                                .foregroundStyle(.white.opacity(0.2))
+                            AxisTick(stroke: StrokeStyle(lineWidth: 0))
                         }
-                        AxisGridLine()
-                        AxisTick()
                     }
-                }
-                .chartBackground { chartProxy in
-                    GeometryReader { geometry in
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        updateSelectedDate(at: value.location, in: geometry, chartProxy: chartProxy)
-                                    }
-                                    .onEnded { _ in
-                                        selectedDate = nil
-                                    }
+                    .chartBackground { chartProxy in
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            updateSelectedDate(at: value.location, in: geometry, chartProxy: chartProxy)
+                                        }
+                                        .onEnded { _ in
+                                            selectedDate = nil
+                                        }
+                                )
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.3))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
                             )
-                    }
-                }
-                .padding(.horizontal)
-                .overlay(alignment: .topTrailing) {
-                    // Tooltip
-                    if let selectedDate = selectedDate,
-                       let selectedData = viewModel.dailyProfitData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(selectedData.formattedDate)
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text(selectedData.formattedProfit)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
-                            
-                            Text("\(selectedData.sessionCount) sesiones")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        // Modern tooltip
+                        if let selectedDate = selectedDate,
+                           let selectedData = viewModel.dailyProfitData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(selectedData.formattedDate)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white.opacity(0.8))
+                                
+                                Text(selectedData.formattedProfit)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.green)
+                                
+                                Text("\(selectedData.sessionCount) sesiones")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.black.opacity(0.8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.green.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedDate)
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
                         }
-                        .padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(.systemBackground))
-                                .shadow(radius: 4)
-                        )
-                        .animation(.easeInOut(duration: 0.2), value: selectedDate)
                     }
                 }
             }
         }
         .padding(.vertical)
+    }
+    
+    private var modernEmptyChartView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 48))
+                .foregroundColor(.white.opacity(0.5))
+            
+            VStack(spacing: 8) {
+                Text("No hay datos de ganancias")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Text("Las ganancias aparecerán aquí después de completar juegos")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(height: 200)
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
     
     private func updateSelectedDate(at location: CGPoint, in geometry: GeometryProxy, chartProxy: ChartProxy) {
@@ -1109,10 +1215,13 @@ struct EnhancedDashboardButton: View {
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
             }
             
             Spacer()
