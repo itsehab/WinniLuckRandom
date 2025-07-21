@@ -1,6 +1,28 @@
 import SwiftUI
 import Charts
 
+// MARK: - Extensions
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
+}
+
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @Environment(\.dismiss) private var dismiss
@@ -24,9 +46,23 @@ struct DashboardView: View {
     
     var body: some View {
         NavigationView {
-            mainContent
-                .navigationTitle("Mi estadistica")
-                .navigationBarTitleDisplayMode(.large)
+            ZStack {
+                // Beautiful gradient background matching main app
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.2, blue: 0.4),
+                        Color(red: 0.2, green: 0.3, blue: 0.6),
+                        Color(red: 0.1, green: 0.1, blue: 0.3)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                mainContent
+                    .navigationTitle("")
+                    .navigationBarHidden(true)
+            }
         }
         .task {
             await viewModel.loadDashboardData()
@@ -36,15 +72,137 @@ struct DashboardView: View {
         }
     }
     
+    // MARK: - Admin Header
+    
+    private var adminHeader: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mi Estadística")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("Panel de Administración")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                
+                Spacer()
+                
+                // Stats quick view
+                if let stats = viewModel.stats {
+                    QuickStatsView(stats: stats)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            
+            // Time filter pills
+            timeFilterPills
+        }
+        .padding(.bottom, 10)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.3),
+                    Color.black.opacity(0.1),
+                    Color.clear
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+    
+    // MARK: - Quick Stats View
+    
+    private func QuickStatsView(stats: StatsSummary) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundColor(.green)
+                    .font(.caption)
+                Text(formatCurrency(stats.totalProfit))
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+            }
+            
+            Text("\(stats.totalGames) juegos")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.green.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+    
+    // MARK: - Time Filter Pills
+    
+    private var timeFilterPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach([TimeFilter.day, .week, .month, .year], id: \.self) { filter in
+                    TimeFilterPill(
+                        filter: filter,
+                        isSelected: viewModel.selectedTimeFilter == filter,
+                        onTap: {
+                            viewModel.updateTimeFilter(filter)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    // MARK: - Time Filter Pill
+    
+    private func TimeFilterPill(filter: TimeFilter, isSelected: Bool, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            Text(filter.localizedTitle)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isSelected ? .black : .white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(isSelected ? Color.white : Color.white.opacity(0.2))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                        )
+                )
+        }
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+
     // MARK: - Main Content
     
     @ViewBuilder
     private var mainContent: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                contentBody
+        VStack(spacing: 0) {
+            // Custom header
+            adminHeader
+            
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: 24) {
+                    contentBody
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 100) // Extra bottom padding for floating button
             }
-            .padding(.vertical)
         }
     }
     
@@ -63,7 +221,6 @@ struct DashboardView: View {
     private func statsContent(stats: StatsSummary) -> some View {
         kpiCardsSection(stats: stats)
         profitChartSection
-        timeFilterSection
         sortBySection
         gameHistorySection
         navigationButtonsSection
@@ -98,36 +255,39 @@ struct DashboardView: View {
     }
     
     private func kpiCardsSection(stats: StatsSummary) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
-            KPICard(
-                title: "Juegos",
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
+            EnhancedKPICard(
+                title: "Juegos Jugados",
                 value: "\(stats.totalGames)",
                 icon: "gamecontroller.fill",
-                color: .blue
+                color: .blue,
+                subtitle: "Total"
             )
             
-            KPICard(
-                title: "Ingreso",
+            EnhancedKPICard(
+                title: "Ingreso Total",
                 value: formatCurrency(stats.totalGrossIncome),
-                icon: "dollarsign.circle.fill",
-                color: .green
+                icon: "arrow.down.circle.fill",
+                color: .cyan,
+                subtitle: "Recaudado"
             )
             
-            KPICard(
-                title: "Ganancia", 
+            EnhancedKPICard(
+                title: "Mi Ganancia", 
                 value: formatCurrency(stats.totalProfit),
                 icon: "chart.line.uptrend.xyaxis",
-                color: .orange
+                color: .green,
+                subtitle: "Neta"
             )
             
-            KPICard(
+            EnhancedKPICard(
                 title: "Margen",
                 value: "\(String(format: "%.1f", stats.profitMargin * 100))%",
                 icon: "percent",
-                color: .purple
+                color: .orange,
+                subtitle: "Promedio"
             )
         }
-        .padding(.horizontal)
     }
     
     private var profitChartSection: some View {
@@ -292,12 +452,14 @@ struct DashboardView: View {
     private var sortBySection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Ordenar por Margen")
+                Text("Ordenar por Ganancia")
                     .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
                 
                 Text(selectedSortOption == .profitAsc ? "Menor a Mayor" : "Mayor a Menor")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.7))
             }
             
             Spacer()
@@ -305,71 +467,132 @@ struct DashboardView: View {
             Button(action: {
                 selectedSortOption = selectedSortOption == .profitAsc ? .profitDesc : .profitAsc
             }) {
-                Image(systemName: selectedSortOption == .profitAsc ? "arrow.up" : "arrow.down")
-                    .font(.title2)
-                    .foregroundColor(.blue)
+                HStack(spacing: 6) {
+                    Image(systemName: selectedSortOption == .profitAsc ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Cambiar")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.blue.opacity(0.2))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                        )
+                )
             }
         }
-        .padding(.horizontal)
     }
     
     private var gameHistorySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header
             HStack {
-                Text("Historia de Juegos")
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Historia de Juegos")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    if !viewModel.filteredGameSessions.isEmpty {
+                        Text("← Desliza para eliminar")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
                 
                 Spacer()
                 
                 if !viewModel.filteredGameSessions.isEmpty {
-                    Text("Desliza para eliminar")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Text("\(viewModel.filteredGameSessions.count)")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.blue.opacity(0.2))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                                )
+                        )
                 }
             }
-            .padding(.horizontal)
             
+            // Game sessions list
             if viewModel.filteredGameSessions.isEmpty {
-                Text("No hay sesiones de juego")
-                    .foregroundColor(.secondary)
-                    .padding()
+                emptyStateView
             } else {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 12) {
                     ForEach(viewModel.sortedGameSessions(by: selectedSortOption)) { session in
-                        GameSessionCard(session: session, viewModel: viewModel)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    viewModel.deleteGameSession(session)
-                                } label: {
-                                    Label("Eliminar Juego", systemImage: "trash")
-                                }
+                        SwipeableGameSessionCard(
+                            session: session, 
+                            viewModel: viewModel,
+                            onDelete: {
+                                viewModel.deleteGameSession(session)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    viewModel.deleteGameSession(session)
-                                } label: {
-                                    Label("Eliminar", systemImage: "trash")
-                                }
-                            }
+                        )
                     }
                 }
-                .padding(.horizontal)
             }
         }
     }
     
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "gamecontroller")
+                .font(.system(size: 48))
+                .foregroundColor(.white.opacity(0.5))
+            
+            VStack(spacing: 8) {
+                Text("No hay juegos registrados")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Text("Los juegos aparecerán aquí después de completarlos")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+    
     private var navigationButtonsSection: some View {
-        VStack(spacing: 15) {
+        VStack(spacing: 16) {
             NavigationLink(destination: GameModesView()) {
-                DashboardButton(
-                    title: "Crear Juegos",
+                EnhancedDashboardButton(
+                    title: "Gestionar Modos de Juego",
+                    subtitle: "Crear, editar y configurar",
                     icon: "gamecontroller.fill",
                     color: .green
                 )
             }
+            
+            NavigationLink(destination: GameHistoryView()) {
+                EnhancedDashboardButton(
+                    title: "Historial Completo",
+                    subtitle: "Ver todos los juegos",
+                    icon: "clock.arrow.circlepath",
+                    color: .blue
+                )
+            }
         }
-        .padding(.horizontal)
     }
     
     // MARK: - Helper Methods
@@ -420,53 +643,241 @@ struct KPICard: View {
     }
 }
 
+// MARK: - Instagram-Style Swipeable Game Session Card
+
+struct SwipeableGameSessionCard: View {
+    let session: GameSession
+    let viewModel: DashboardViewModel
+    let onDelete: () -> Void
+    
+    @State private var offset: CGFloat = 0
+    @State private var isDeleting = false
+    
+    private let deleteButtonWidth: CGFloat = 80
+    private let deleteThreshold: CGFloat = 150
+    
+    var body: some View {
+        ZStack {
+            // Background delete area
+            HStack {
+                Spacer()
+                deleteBackground
+            }
+            
+            // Main card content
+            GameSessionCard(session: session, viewModel: viewModel)
+                .offset(x: offset)
+                .gesture(
+                    DragGesture(coordinateSpace: .local)
+                        .onChanged { value in
+                            // Only allow left swipe (negative translation)
+                            if value.translation.width < 0 {
+                                offset = value.translation.width
+                            }
+                        }
+                        .onEnded { value in
+                            let translation = value.translation.width
+                            let velocity = value.velocity.width
+                            
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                if translation < -deleteThreshold || velocity < -1000 {
+                                    // Swipe far enough or fast enough - delete
+                                    performDelete()
+                                } else if translation < -deleteButtonWidth / 2 {
+                                    // Show delete button
+                                    offset = -deleteButtonWidth
+                                } else {
+                                    // Return to original position
+                                    offset = 0
+                                }
+                            }
+                        }
+                )
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: offset)
+        }
+        .clipped()
+    }
+    
+    private var deleteBackground: some View {
+        HStack {
+            if offset < -deleteButtonWidth / 3 {
+                Button(action: performDelete) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "trash.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        
+                        Text("Eliminar")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: deleteButtonWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.red.opacity(0.8), Color.red],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12, corners: [.topRight, .bottomRight])
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: offset)
+    }
+    
+    private func performDelete() {
+        guard !isDeleting else { return }
+        isDeleting = true
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            offset = -400 // Slide completely off screen
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            onDelete()
+        }
+    }
+}
+
+// MARK: - Game Session Card (Updated Design)
+
 struct GameSessionCard: View {
     let session: GameSession
     let viewModel: DashboardViewModel
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
+            // Header row
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.getGameModeTitle(for: session.modeID))
                         .font(.headline)
-                        .foregroundColor(.primary)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
                     
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "trophy.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.yellow)
                             .font(.caption)
                         Text("\(session.winnerIDs.count) ganadores")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.8))
                     }
                 }
                 
                 Spacer()
                 
-                Text(formatDateTime(session.date))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(formatDateTime(session.date))
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.3.fill")
+                            .font(.caption)
+                            .foregroundColor(.blue.opacity(0.8))
+                        Text("\(session.playerIDs.count)")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
             }
             
+            // Financial info row
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Premio: \(formatCurrency(session.payout))")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                    
-                    Text("Mi Ganancia: \(formatCurrency(session.profit))")
-                        .font(.subheadline)
-                        .foregroundColor(.green)
-                        .fontWeight(.semibold)
-                }
+                FinancialPill(
+                    title: "Ingreso",
+                    amount: session.grossIncome,
+                    color: .blue,
+                    icon: "arrow.down.circle.fill"
+                )
                 
                 Spacer()
+                
+                FinancialPill(
+                    title: "Premio",
+                    amount: session.payout,
+                    color: .orange,
+                    icon: "gift.fill"
+                )
+                
+                Spacer()
+                
+                FinancialPill(
+                    title: "Ganancia",
+                    amount: session.profit,
+                    color: .green,
+                    icon: "chart.line.uptrend.xyaxis"
+                )
             }
         }
-        .padding()
-        .background(Color(.systemGray6))
+        .padding(16)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.6),
+                    Color.black.opacity(0.4)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
         .cornerRadius(12)
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Financial Pill Component
+
+struct FinancialPill: View {
+    let title: String
+    let amount: Decimal
+    let color: Color
+    let icon: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            
+            Text(formatCurrency(amount))
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.4), lineWidth: 1)
+                )
+        )
     }
     
     private func formatCurrency(_ amount: Decimal) -> String {
@@ -474,15 +885,8 @@ struct GameSessionCard: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = "PEN"
         formatter.currencySymbol = "S/."
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "S/. 0.00"
-    }
-    
-    private func formatDateTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "S/. 0"
     }
 }
 
@@ -608,6 +1012,133 @@ struct DatePickerView: View {
                 endDate: endDate
             ))
         }
+    }
+}
+
+// MARK: - Enhanced Components
+
+struct EnhancedKPICard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    let subtitle: String
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Header with icon and title
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: icon)
+                            .foregroundColor(color)
+                            .font(.title3)
+                        
+                        Text(subtitle)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    
+                    Text(title)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+            }
+            
+            // Value
+            HStack {
+                Text(value)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Spacer()
+            }
+        }
+        .padding(16)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.5),
+                    Color.black.opacity(0.3)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(color.opacity(0.4), lineWidth: 1)
+        )
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+}
+
+struct EnhancedDashboardButton: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.2))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Circle()
+                            .stroke(color.opacity(0.4), lineWidth: 1)
+                    )
+                
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
+            
+            // Text content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            Spacer()
+            
+            // Arrow
+            Image(systemName: "chevron.right")
+                .foregroundColor(.white.opacity(0.6))
+                .font(.system(size: 16, weight: .semibold))
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.4),
+                    Color.black.opacity(0.2)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
     }
 }
 
