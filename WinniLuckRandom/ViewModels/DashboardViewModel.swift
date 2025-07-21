@@ -197,6 +197,30 @@ class DashboardViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
+    
+    // MARK: - Game Session Management
+    
+    func deleteGameSession(_ session: GameSession) {
+        Task {
+            let success = await storageManager.deleteGameSession(session)
+            
+            await MainActor.run {
+                if success {
+                    // Remove from local arrays
+                    self.recentGameSessions.removeAll { $0.id == session.id }
+                    self.filteredGameSessions.removeAll { $0.id == session.id }
+                    
+                    // Refresh stats to reflect the changes
+                    self.refreshData()
+                    
+                    print("✅ Game session deleted successfully from dashboard")
+                } else {
+                    self.error = NSError(domain: "DeleteError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to delete game session"])
+                    print("❌ Failed to delete game session from dashboard")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Preview Support

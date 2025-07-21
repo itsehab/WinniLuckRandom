@@ -39,11 +39,11 @@ class GameHistoryViewModel: ObservableObject {
         }
     }
     
-    private let cloudKitService: CloudKitService
+    private let storageManager: StorageManager
     private var cancellables = Set<AnyCancellable>()
     
-    init(cloudKitService: CloudKitService = CloudKitService.shared) {
-        self.cloudKitService = cloudKitService
+    init(storageManager: StorageManager = StorageManager.shared) {
+        self.storageManager = storageManager
         setupFilteredSessions()
         loadGameSessions()
     }
@@ -109,18 +109,11 @@ class GameHistoryViewModel: ObservableObject {
         error = nil
         
         Task {
-            do {
-                let sessions = await cloudKitService.fetchGameSessions()
-                
-                await MainActor.run {
-                    self.gameSessions = sessions
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error
-                    self.isLoading = false
-                }
+            let sessions = await storageManager.fetchGameSessions()
+            
+            await MainActor.run {
+                self.gameSessions = sessions
+                self.isLoading = false
             }
         }
     }
@@ -130,17 +123,17 @@ class GameHistoryViewModel: ObservableObject {
         error = nil
         
         Task {
-            do {
-                await cloudKitService.deleteGameSession(session)
-                await MainActor.run {
+            let success = await storageManager.deleteGameSession(session)
+            
+            await MainActor.run {
+                if success {
                     self.gameSessions.removeAll { $0.id == session.id }
-                    self.isLoading = false
+                    print("✅ Game session deleted successfully")
+                } else {
+                    self.error = NSError(domain: "DeleteError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to delete game session"])
+                    print("❌ Failed to delete game session")
                 }
-            } catch {
-                await MainActor.run {
-                    self.error = error
-                    self.isLoading = false
-                }
+                self.isLoading = false
             }
         }
     }

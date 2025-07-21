@@ -315,13 +315,44 @@ struct DashboardView: View {
     
     private var gameHistorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Historia de Juegos")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if !viewModel.filteredGameSessions.isEmpty {
+                    Text("Desliza para eliminar")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal)
+            
             if viewModel.filteredGameSessions.isEmpty {
                 Text("No hay sesiones de juego")
                     .foregroundColor(.secondary)
                     .padding()
             } else {
-                ForEach(viewModel.sortedGameSessions(by: selectedSortOption)) { session in
-                    GameSessionCard(session: session, viewModel: viewModel)
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.sortedGameSessions(by: selectedSortOption)) { session in
+                        GameSessionCard(session: session, viewModel: viewModel)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    viewModel.deleteGameSession(session)
+                                } label: {
+                                    Label("Eliminar Juego", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    viewModel.deleteGameSession(session)
+                                } label: {
+                                    Label("Eliminar", systemImage: "trash")
+                                }
+                            }
+                    }
                 }
                 .padding(.horizontal)
             }

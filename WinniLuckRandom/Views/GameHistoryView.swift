@@ -15,10 +15,10 @@ struct GameHistoryView: View {
                 .searchable(text: $viewModel.searchText, prompt: "history_search_placeholder")
         }
         .task {
-            // Load sessions on appear - simplified version
+            viewModel.loadGameSessions()
         }
         .onChange(of: viewModel.sortOrder) { _, _ in
-            // Refresh when sort order changes - simplified version  
+            viewModel.loadGameSessions()
         }
         .alert("history_error_title", isPresented: .constant(viewModel.error != nil)) {
             Button("common_ok") {
@@ -72,13 +72,13 @@ struct GameHistoryView: View {
                 GameSessionRow(session: session)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button("common_delete", role: .destructive) {
-                            // Delete functionality - simplified version
+                            viewModel.deleteGameSession(session)
                         }
                     }
             }
         }
         .refreshable {
-            // Refresh functionality - simplified version
+            viewModel.loadGameSessions()
         }
     }
     

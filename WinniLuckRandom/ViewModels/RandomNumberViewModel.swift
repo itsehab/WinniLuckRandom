@@ -292,9 +292,61 @@ class RandomNumberViewModel: ObservableObject {
         // Generate winner data
         gameWinners = generateWinnerData()
         
+        // Save the completed game session with final results
+        saveCompletedGameSession()
+        
         // Show winners screen
         showingWinners = true
         showingCongrats = false
+    }
+    
+    private func saveCompletedGameSession() {
+        guard let gameMode = currentGameMode else {
+            print("❌ Cannot save game session: No game mode")
+            return
+        }
+        
+        // Get final winning numbers and winner player IDs
+        let requiredWinners = gameMode.maxWinners
+        let finalWinningNumbers = Array(winnerOrder.prefix(requiredWinners))
+        let winnerPlayerIDs = finalWinningNumbers.compactMap { number in
+            currentPlayers.first(where: { $0.selectedNumber == number })?.id
+        }
+        
+        // Calculate final financial data
+        let playerCount = currentPlayers.count
+        let grossIncome = gameMode.calculateGross(for: playerCount)
+        let actualWinners = winnerPlayerIDs.count
+        let payout = gameMode.calculatePayout(for: actualWinners)
+        let profit = gameMode.calculateProfit(for: playerCount, winners: actualWinners)
+        
+        // Create the final game session with complete data
+        let completedSession = GameSession(
+            id: currentGameSession?.id ?? UUID(), // Preserve original ID if exists
+            modeID: gameMode.id,
+            startRange: 1,
+            endRange: gameMode.maxPlayers,
+            repetitions: gameMode.repetitions,
+            numWinners: actualWinners,
+            playerIDs: currentPlayers.map { $0.id },
+            winningNumbers: finalWinningNumbers,
+            winnerIDs: winnerPlayerIDs,
+            date: currentGameSession?.date ?? Date(), // Preserve original date
+            grossIncome: grossIncome,
+            profit: profit,
+            payout: payout
+        )
+        
+        // Save to storage
+        Task {
+            let success = await StorageManager.shared.saveGameSession(completedSession)
+            if success {
+                print("✅ Game session saved successfully: \(completedSession.id)")
+                print("📊 Final results: \(actualWinners) winners, profit: \(profit), gross: \(grossIncome)")
+            } else {
+                print("❌ Failed to save game session")
+            }
+        }
     }
     
     func generateWinnerData() -> [WinnerData] {

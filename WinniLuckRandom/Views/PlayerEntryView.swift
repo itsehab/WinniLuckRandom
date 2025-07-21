@@ -575,7 +575,7 @@ struct NumberAssignmentCard: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 // Number circle
                 ZStack {
                     Circle()
@@ -592,21 +592,49 @@ struct NumberAssignmentCard: View {
                         .foregroundColor(.white)
                 }
                 
-                // Player name (if assigned)
+                // Player info (name and avatar if assigned)
                 if let player = player {
-                    Text(player.firstName)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    VStack(spacing: 6) {
+                        // Player name
+                        Text(player.firstName)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        
+                        // Player avatar
+                        AvatarImageView(
+                            avatarURL: player.avatarURL,
+                            size: 35
+                        )
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.yellow.opacity(0.8), lineWidth: 2)
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    }
                 } else {
-                    Text("Disponible")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.6))
+                    // Available placeholder
+                    VStack(spacing: 6) {
+                        Text("Disponible")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.6))
+                        
+                        // Placeholder for avatar space
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 35, height: 35)
+                            .overlay(
+                                Image(systemName: "person.crop.circle.badge.plus")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white.opacity(0.5))
+                            )
+                    }
                 }
             }
-            .frame(height: 80)
+            .frame(height: 120)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12)
