@@ -13,9 +13,37 @@ class LocalStorageService: StorageServiceProtocol {
     static let shared = LocalStorageService()
     
     // MARK: - Published Properties
-    @Published var isOnline = true // Always "online" for local storage
-    @Published var isInitialized = true // Always initialized
-    @Published var errorMessage: String?
+    @Published var _isOnline = true // Always "online" for local storage
+    @Published var _isInitialized = true // Always initialized
+    @Published var _errorMessage: String?
+    
+    // MARK: - Nonisolated Properties for Protocol Conformance
+    nonisolated var isOnline: Bool {
+        get {
+            MainActor.assumeIsolated { _isOnline }
+        }
+        set {
+            MainActor.assumeIsolated { _isOnline = newValue }
+        }
+    }
+    
+    nonisolated var isInitialized: Bool {
+        get {
+            MainActor.assumeIsolated { _isInitialized }
+        }
+        set {
+            MainActor.assumeIsolated { _isInitialized = newValue }
+        }
+    }
+    
+    nonisolated var errorMessage: String? {
+        get {
+            MainActor.assumeIsolated { _errorMessage }
+        }
+        set {
+            MainActor.assumeIsolated { _errorMessage = newValue }
+        }
+    }
     
     // MARK: - Private Properties
     private let fileManager = FileManager.default

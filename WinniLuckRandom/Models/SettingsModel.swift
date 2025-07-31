@@ -7,12 +7,20 @@
 
 import Foundation
 import SwiftUI
+import AVFoundation
 
 class SettingsModel: ObservableObject {
     @Published var backgroundImage: UIImage?
     @Published var voiceEnabled: Bool = true
     @Published var backgroundImageSelected: Bool = false
     @Published var backgroundImageError: String?
+    @Published var selectedVoiceIdentifier: String? {
+        didSet {
+            UserDefaults.standard.set(selectedVoiceIdentifier, forKey: "selectedVoiceIdentifier")
+            // Notify SpeechHelper about the voice change
+            SpeechHelper.shared.updateSelectedVoice(identifier: selectedVoiceIdentifier)
+        }
+    }
     
     private let backgroundImageKey = "backgroundImageData"
     private let voiceEnabledKey = "voiceEnabled"
@@ -24,6 +32,8 @@ class SettingsModel: ObservableObject {
     
     init() {
         loadSettings()
+        // Load saved voice identifier
+        self.selectedVoiceIdentifier = UserDefaults.standard.string(forKey: "selectedVoiceIdentifier")
         debugPrintStoredData()
     }
     

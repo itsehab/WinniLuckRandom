@@ -24,7 +24,10 @@ struct HomeView: View {
     @State private var brandingScale: CGFloat = 1.0
     
     var body: some View {
-        NavigationView {
+        print("🏠 HomeView body - showingResult: \(viewModel.showingResult)")
+        print("🏠 HomeView body - showingCountdown: \(viewModel.showingCountdown)")
+        
+        return NavigationView {
             ZStack {
                 // Background
                 BackgroundView(image: settings.backgroundImage)
@@ -44,8 +47,9 @@ struct HomeView: View {
                         
                         // Start button moved to bottom
                             startButton
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
+                            .frame(maxWidth: UIDevice.isIPad ? 500 : .infinity) // Prevent stretching on iPad
+                            .adaptivePadding(iPadPadding: 40, iPhonePadding: 20)
+                            .padding(.bottom, UIDevice.isIPad ? 30 : 20)
                         
                         // Bottom navigation
                         bottomNavigation
@@ -53,7 +57,7 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .navigationViewStyle(.stack) // Use stack navigation on all devices for single-view design
         .onAppear {
             Task {
                 // Force refresh for testing order changes
@@ -83,7 +87,7 @@ struct HomeView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(settings: settings)
         }
-        .sheet(isPresented: $showingAdminDashboard) {
+        .fullScreenCover(isPresented: UIDevice.isIPad ? $showingAdminDashboard : .constant(false)) {
             DashboardView()
                 .onDisappear {
                     // Refresh game modes when coming back from admin dashboard
@@ -104,7 +108,37 @@ struct HomeView: View {
                     }
                 }
         }
-        .sheet(isPresented: $showingPlayerEntry) {
+        .sheet(isPresented: UIDevice.isIPad ? .constant(false) : $showingAdminDashboard) {
+            DashboardView()
+                .onDisappear {
+                    // Refresh game modes when coming back from admin dashboard
+                    Task {
+                        await gameModesViewModel.forceRefresh()
+                        
+                        // Ensure UI updates on main actor
+                        await MainActor.run {
+                            // Auto-select first game mode if available
+                            if selectedGameMode == nil, let firstMode = gameModesViewModel.gameModes.first {
+                                withAnimation(.easeInOut(duration: 0.5)) {
+                                    selectedGameMode = firstMode
+                                }
+                                viewModel.startNumber = "1"
+                                viewModel.endNumber = "\(firstMode.maxPlayers)"
+                            }
+                        }
+                    }
+                }
+        }
+        .fullScreenCover(isPresented: UIDevice.isIPad ? $showingPlayerEntry : .constant(false)) {
+            if let gameMode = selectedGameMode {
+                PlayerEntryView(gameMode: gameMode) { players in
+                    currentPlayers = players
+                    showingPlayerEntry = false
+                    startGame(with: players)
+                }
+            }
+        }
+        .sheet(isPresented: UIDevice.isIPad ? .constant(false) : $showingPlayerEntry) {
             if let gameMode = selectedGameMode {
                 PlayerEntryView(gameMode: gameMode) { players in
                     currentPlayers = players
@@ -115,6 +149,9 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $viewModel.showingResult) {
             ResultView(viewModel: viewModel, settings: settings)
+        }
+        .fullScreenCover(isPresented: $viewModel.showingCountdown) {
+            CountdownView(viewModel: viewModel, settings: settings)
         }
         .alert(isPresented: $showingAlert) {
             Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
@@ -128,8 +165,8 @@ struct HomeView: View {
             titleText
             Spacer()
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .adaptivePadding(iPadPadding: 40, iPhonePadding: 24)
+        .padding(.vertical, UIDevice.isIPad ? 20 : 12)
         .safeAreaInset(edge: .top) {
             Color.clear.frame(height: 0)
         }
@@ -138,7 +175,11 @@ struct HomeView: View {
     // MARK: - Title Text
     private var titleText: some View {
         Text("WinniLuck")
-            .font(.system(size: 28, weight: .bold, design: .rounded))
+            .font(.system(
+                size: UIDevice.isIPad ? 42 : 28, 
+                weight: .bold, 
+                design: .rounded
+            ))
             .foregroundStyle(
                 LinearGradient(
                     gradient: Gradient(colors: [
@@ -171,8 +212,8 @@ struct HomeView: View {
         @State private var cards: [GameModeCardData] = []
         @State private var currentStartIndex: Int = 0  // Track which part of gameModes we're showing
         
-        // adjustable constants
-        private let spacing: CGFloat = 15      // vertical gap between cards
+        // adjustable constants - adaptive for iPad
+        private var spacing: CGFloat { UIDevice.isIPad ? 20 : 15 }      // vertical gap between cards
         private let scaleStep: CGFloat = 0.06  // smaller cards near back
         private let rotationStep: Double = 2   // degrees
         
@@ -182,7 +223,7 @@ struct HomeView: View {
                     card(at: index)
                 }
             }
-            .frame(height: 380)
+            .frame(height: UIDevice.isIPad ? 480 : 380)
             .clipped() // Simple clipping to prevent cards from going beyond the frame
             .onAppear {
                 setupCards()
@@ -439,12 +480,12 @@ struct HomeView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(gameMode.title)
-                            .font(.title2)
+                            .font(UIDevice.isIPad ? .largeTitle : .title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
                         
                         Text("Entrada \(formatCurrency(gameMode.entryPriceSoles))")
-                            .font(.headline)
+                            .font(UIDevice.isIPad ? .title3 : .headline)
                             .foregroundColor(.secondary)
                     }
                     
@@ -452,7 +493,7 @@ struct HomeView: View {
                     
                     // Game mode icon
                     Image(systemName: "gamecontroller.fill")
-                        .font(.title)
+                        .font(UIDevice.isIPad ? .system(size: 36) : .title)
                         .foregroundColor(.blue)
                 }
                 
@@ -503,16 +544,16 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 180) // Optimized height for 3-card display
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            .frame(height: UIDevice.isIPad ? 240 : 180) // Adaptive height for iPad
+            .padding(.horizontal, UIDevice.isIPad ? 24 : 16)
+            .padding(.vertical, UIDevice.isIPad ? 24 : 16)
             .background(
                 RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color.white.opacity(0.98),
-                                Color.white.opacity(0.92)
+                                Color.white,
+                                Color(red: 0.98, green: 0.98, blue: 0.98)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -614,6 +655,7 @@ struct HomeView: View {
                         currentIndex: $currentGameModeIndex
                     )
                     .id(gameModesViewModel.gameModes.map { $0.id }.description)
+                    .frame(maxWidth: UIDevice.isIPad ? 500 : .infinity) // Prevent stretching on iPad
                     
                     // Page indicator and navigation info
                     GameModeIndicator(
@@ -621,8 +663,11 @@ struct HomeView: View {
                         totalCount: gameModesViewModel.gameModes.count
                     )
                 }
+                .frame(maxWidth: .infinity) // Center the constrained content
             }
         }
+        .frame(maxWidth: UIDevice.isIPad ? 600 : .infinity) // Prevent section from stretching too wide on iPad
+        .frame(maxWidth: .infinity) // Center the constrained section
     }
     
     // MARK: - Start Button
@@ -643,13 +688,14 @@ struct HomeView: View {
             HStack {
                 Image(systemName: selectedGameMode != nil ? "person.2.fill" : "exclamationmark.triangle.fill")
                     .foregroundColor(.white)
+                    .font(UIDevice.isIPad ? .title2 : .body)
                 Text(selectedGameMode != nil ? "Empezar" : NSLocalizedString("game_mode_select_first", comment: ""))
                     .foregroundColor(.white)
-                    .font(.headline)
+                    .font(UIDevice.isIPad ? .title2 : .headline)
                     .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .frame(height: AdaptiveSize.buttonHeight())
             .background(startButtonBackground)
             .cornerRadius(16)
         }
@@ -754,6 +800,10 @@ struct HomeView: View {
     }
     
     private func startGame(with players: [Player]) {
+        print("🚀 HomeView.startGame() CALLED")
+        print("  - Players count: \(players.count)")
+        print("  - Selected game mode: \(selectedGameMode?.title ?? "nil")")
+        
         // Create the game session with the actual players
         let playerCount = players.count
         let grossIncome = selectedGameMode?.calculateGross(for: playerCount) ?? 0
@@ -781,6 +831,7 @@ struct HomeView: View {
         
         viewModel.currentGameSession = gameSession
         viewModel.currentPlayers = players
+        viewModel.currentGameMode = selectedGameMode // CRITICAL: Set the game mode for validation
         viewModel.generateRandomNumbers()
     }
     

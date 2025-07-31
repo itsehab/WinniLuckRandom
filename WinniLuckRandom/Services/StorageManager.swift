@@ -38,7 +38,10 @@ struct PendingOperation: Codable {
 
 @MainActor
 class StorageManager: ObservableObject {
-    static let shared = StorageManager()
+    @preconcurrency static let shared: StorageManager = {
+        let instance = StorageManager()
+        return instance
+    }()
     
     @Published var currentStorageType: StorageType = .local
     @Published var isOnline: Bool = true
@@ -127,23 +130,32 @@ class StorageManager: ObservableObject {
         let cloudKitService = CloudKitService.shared
         
         // Migrate players
-        let localPlayers = try await localService.fetchPlayers()
+        let localPlayers = await localService.fetchPlayers()
         for player in localPlayers {
-            try await cloudKitService.savePlayer(player)
-        }
+            let success = await cloudKitService.savePlayer(player)
+            if !success {
+                print("⚠️ Failed to migrate player: \(player.firstName)")
+            }
+        } 
         print("✅ Migrated \(localPlayers.count) players")
         
         // Migrate game modes
-        let localGameModes = try await localService.fetchGameModes()
+        let localGameModes = await localService.fetchGameModes()
         for gameMode in localGameModes {
-            try await cloudKitService.saveGameMode(gameMode)
+            let success = await cloudKitService.saveGameMode(gameMode)
+            if !success {
+                print("⚠️ Failed to migrate game mode: \(gameMode.title)")
+            }
         }
         print("✅ Migrated \(localGameModes.count) game modes")
         
         // Migrate game sessions
-        let localGameSessions = try await localService.fetchGameSessions()
+        let localGameSessions = await localService.fetchGameSessions()
         for gameSession in localGameSessions {
-            try await cloudKitService.saveGameSession(gameSession)
+            let success = await cloudKitService.saveGameSession(gameSession)
+            if !success {
+                print("⚠️ Failed to migrate game session: \(gameSession.id)")
+            }
         }
         print("✅ Migrated \(localGameSessions.count) game sessions")
         
@@ -166,21 +178,30 @@ class StorageManager: ObservableObject {
         // Migrate game modes
         let localGameModes = await localService.fetchGameModes()
         for gameMode in localGameModes {
-            _ = await cloudKitService.saveGameMode(gameMode)
+            let success = await cloudKitService.saveGameMode(gameMode)
+            if !success {
+                print("⚠️ Failed to migrate game mode: \(gameMode.title)")
+            }
         }
         print("✅ Migrated \(localGameModes.count) game modes")
         
         // Migrate players
         let localPlayers = await localService.fetchPlayers()
         for player in localPlayers {
-            _ = await cloudKitService.savePlayer(player)
+            let success = await cloudKitService.savePlayer(player)
+            if !success {
+                print("⚠️ Failed to migrate player: \(player.firstName)")
+            }
         }
         print("✅ Migrated \(localPlayers.count) players")
         
         // Migrate game sessions
         let localSessions = await localService.fetchGameSessions()
         for session in localSessions {
-            _ = await cloudKitService.saveGameSession(session)
+            let success = await cloudKitService.saveGameSession(session)
+            if !success {
+                print("⚠️ Failed to migrate game session: \(session.id)")
+            }
         }
         print("✅ Migrated \(localSessions.count) game sessions")
         

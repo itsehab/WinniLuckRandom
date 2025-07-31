@@ -71,15 +71,15 @@ struct AdminUnlockView: View {
                             
                             // PIN Input Field
                             VStack(spacing: 10) {
-                                HStack {
+                            HStack {
                                     SecureField("Enter PIN", text: $pinInput)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                                        .keyboardType(.numberPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .keyboardType(.numberPad)
                                         .autocorrectionDisabled()
                                         .textInputAutocapitalization(.never)
                                         .focused($isPinFieldFocused)
-                                        .disabled(authManager.isLockedOut)
-                                        .onChange(of: pinInput) { _, newValue in
+                                    .disabled(authManager.isLockedOut)
+                                    .onChange(of: pinInput) { _, newValue in
                                             // Clean input - only allow numbers and limit to 6 digits
                                             let filtered = newValue.filter { $0.isNumber }
                                             if filtered.count > 6 {
@@ -87,22 +87,22 @@ struct AdminUnlockView: View {
                                             } else {
                                                 pinInput = filtered
                                             }
-                                        }
-                                        .onSubmit {
-                                            if pinInput.count >= 4 {
-                                                authenticateWithPIN()
-                                            }
-                                        }
-                                    
-                                    Button(action: authenticateWithPIN) {
-                                        Image(systemName: "arrow.right.circle.fill")
-                                            .font(.title2)
-                                            .foregroundColor(pinInput.count >= 4 ? .blue : .gray)
                                     }
-                                    .disabled(pinInput.count < 4 || authManager.isLockedOut)
+                                    .onSubmit {
+                                            if pinInput.count >= 4 {
+                                        authenticateWithPIN()
+                                            }
+                                    }
+                                
+                                Button(action: authenticateWithPIN) {
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(pinInput.count >= 4 ? .blue : .gray)
                                 }
-                                .offset(x: isShaking ? -10 : 0)
-                                .animation(.easeInOut(duration: 0.1).repeatCount(3, autoreverses: true), value: isShaking)
+                                .disabled(pinInput.count < 4 || authManager.isLockedOut)
+                            }
+                            .offset(x: isShaking ? -10 : 0)
+                            .animation(.easeInOut(duration: 0.1).repeatCount(3, autoreverses: true), value: isShaking)
                                 
                                 // PIN hint
                                 Text("PIN: 123456")

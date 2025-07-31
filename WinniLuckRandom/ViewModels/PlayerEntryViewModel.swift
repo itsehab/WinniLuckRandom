@@ -316,6 +316,57 @@ class PlayerEntryViewModel: ObservableObject {
                       selectedGameMode.formattedEntryPrice,
                       selectedGameMode.formattedPrizePerWinner)
     }
+    
+    // MARK: - Test Data Generation
+    func generateTestPlayers(count: Int? = nil) {
+        let testCount = count ?? min(remainingSlots, 10) // Generate up to 10 or remaining slots
+        
+        // Lorem ipsum names for testing
+        let loremNames = [
+            "Alice", "Bob", "Charlie", "Diana", "Edward", "Fiona", "George", "Hannah", 
+            "Ivan", "Julia", "Kevin", "Luna", "Marcus", "Nina", "Oscar", "Paula",
+            "Quinn", "Rosa", "Sam", "Tina", "Ulysses", "Vera", "Walter", "Xara",
+            "Yuri", "Zoe", "Adrian", "Bella", "Carlos", "Delia", "Ethan", "Flora",
+            "Gabriel", "Helena", "Isaac", "Jade", "Kai", "Lara", "Miguel", "Nora",
+            "Owen", "Pia", "Rex", "Sofia", "Theo", "Uma", "Victor", "Willow",
+            "Xavier", "Yasmin", "Zara", "Antonio", "Bianca", "Cristian", "Daniela",
+            "Emilio", "Fernanda", "Gonzalo", "Isabela", "Javier", "Karina",
+            "Leonardo", "Mariana", "Nicolas", "Olivia", "Pablo", "Raquel",
+            "Sebastian", "Teresa", "Valeria", "William", "Ximena", "Yolanda"
+        ]
+        
+        let availableNumbers = getAvailableNumbers()
+        let shuffledNumbers = availableNumbers.shuffled()
+        let shuffledNames = loremNames.shuffled()
+        
+        // Create test players up to the requested count or available slots
+        let actualCount = min(testCount, min(availableNumbers.count, shuffledNames.count))
+        
+        for i in 0..<actualCount {
+            let testPlayer = Player(
+                id: UUID(),
+                firstName: shuffledNames[i],
+                selectedNumber: shuffledNumbers[i]
+            )
+            
+            players.append(testPlayer)
+            
+            // Save to CloudKit
+            Task {
+                await savePlayer(testPlayer)
+            }
+        }
+        
+        clearErrorMessage()
+        
+        print("🧪 Generated \(actualCount) test players")
+        print("🧪 Players: \(players.map { "\($0.firstName) -> \($0.selectedNumber ?? 0)" })")
+    }
+    
+    func clearAllTestData() {
+        clearAllPlayers()
+        print("🧪 Cleared all test data")
+    }
 }
 
 // MARK: - Error Handling

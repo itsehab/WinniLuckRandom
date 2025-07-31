@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 struct SettingsView: View {
     @ObservedObject var settings: SettingsModel
@@ -18,6 +19,8 @@ struct SettingsView: View {
     @State private var showingResetAlert = false
     @State private var showingMigrationAlert = false
     @State private var isMigrating = false
+    @State private var showingVoiceSelection = false
+    @State private var availableVoices: [AVSpeechSynthesisVoice] = []
     
     var body: some View {
         NavigationView {
@@ -31,7 +34,56 @@ struct SettingsView: View {
                         .onChange(of: settings.voiceEnabled) { _, _ in
                             settings.saveVoiceSetting()
                         }
-                            }
+                    
+                    // Voice Selection
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Selected Voice")
+                                .font(.body)
+                            Text(currentVoiceDisplayName)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Change") {
+                            loadAvailableVoices()
+                            showingVoiceSelection = true
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    }
+                    .sheet(isPresented: $showingVoiceSelection) {
+                        voiceSelectionSheet
+                    }
+                    
+                    // Test speech button
+                    Button(action: {
+                        SpeechHelper.shared.testSpeech()
+                    }) {
+                        HStack {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .foregroundColor(.blue)
+                            Text("Test Voice")
+                            Spacer()
+                        }
+                    }
+                    .disabled(!settings.voiceEnabled)
+                    
+                    // Refresh Siri voices button
+                    Button(action: {
+                        SpeechHelper.shared.refreshAndCheckSiriVoices()
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(.green)
+                            Text("Refresh & Check Siri Voices")
+                            Spacer()
+                        }
+                    }
+                    .disabled(!settings.voiceEnabled)
+                }
                             
                 // Background Settings Section
                 Section(header: Text("Background Settings")) {
@@ -187,6 +239,180 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+        }
+    }
+    
+    // MARK: - Voice Selection Methods
+    
+    private var currentVoiceDisplayName: String {
+        if let currentVoice = SpeechHelper.shared.getCurrentVoice() {
+            return "\(currentVoice.name) (\(currentVoice.language))"
+        }
+        return "Auto-selected"
+    }
+    
+    private func loadAvailableVoices() {
+        availableVoices = SpeechHelper.shared.getAvailableVoices()
+    }
+    
+    @ViewBuilder
+    private var voiceSelectionSheet: some View {
+        NavigationView {
+            List {
+                // Auto-select option
+                Section(header: Text("Automatic Selection")) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Auto-select Best Spanish Voice")
+                                .font(.body)
+                            Text("Let the app choose the best Spanish voice (prioritizes Siri Voice 1 & 2)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if settings.selectedVoiceIdentifier == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        settings.selectedVoiceIdentifier = nil
+                        showingVoiceSelection = false
+                    }
+                }
+                
+                // Siri Voices (Any language)
+                let siriVoices = availableVoices.filter { SpeechHelper.shared.isSiriVoice($0) }
+                if !siriVoices.isEmpty {
+                    Section(header: Text("🎤 Siri Voices")) {
+                        ForEach(siriVoices, id: \.identifier) { voice in
+                            voiceSelectionRow(voice: voice, isSiriVoice: true)
+                        }
+                    }
+                }
+                
+                // Spanish voices (non-Siri)
+                let spanishVoices = availableVoices.filter { 
+                    $0.language.hasPrefix("es") && !SpeechHelper.shared.isSiriVoice($0)
+                }
+                if !spanishVoices.isEmpty {
+                    Section(header: Text("🇪🇸 Spanish Voices")) {
+                        ForEach(spanishVoices, id: \.identifier) { voice in
+                            voiceSelectionRow(voice: voice, isSiriVoice: false)
+                        }
+                    }
+                }
+                
+                // Other voices
+                let otherVoices = availableVoices.filter { 
+                    !$0.language.hasPrefix("es") && !SpeechHelper.shared.isSiriVoice($0)
+                }
+                if !otherVoices.isEmpty {
+                    Section(header: Text("🌍 Other Languages")) {
+                        ForEach(otherVoices, id: \.identifier) { voice in
+                            voiceSelectionRow(voice: voice, isSiriVoice: false)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Select Voice")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showingVoiceSelection = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+    
+    @ViewBuilder
+    private func voiceSelectionRow(voice: AVSpeechSynthesisVoice, isSiriVoice: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(voice.name)
+                        .font(.body)
+                        .fontWeight(isSiriVoice ? .semibold : .regular)
+                    
+                    if isSiriVoice {
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.orange)
+                            .font(.caption)
+                    }
+                }
+                
+                if let siriType = SpeechHelper.shared.getSiriVoiceType(voice) {
+                    Text(siriType)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .fontWeight(.medium)
+                }
+                
+                HStack(spacing: 8) {
+                    Text(voice.language.uppercased())
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(4)
+                    
+                    if voice.quality == .enhanced {
+                        Text("Enhanced")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                    
+                    if voice.gender == .female {
+                        Text("Female")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.pink.opacity(0.2))
+                            .cornerRadius(4)
+                    } else if voice.gender == .male {
+                        Text("Male")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                // Preview button
+                Button(action: {
+                    SpeechHelper.shared.previewVoice(voice)
+                }) {
+                    Image(systemName: "play.circle")
+                        .foregroundColor(.blue)
+                        .font(.title2)
+                }
+                
+                // Selection checkmark
+                if settings.selectedVoiceIdentifier == voice.identifier {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            settings.selectedVoiceIdentifier = voice.identifier
+            showingVoiceSelection = false
         }
     }
     

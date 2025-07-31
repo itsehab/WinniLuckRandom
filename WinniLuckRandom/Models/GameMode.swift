@@ -23,6 +23,16 @@ struct GameMode: Identifiable, Codable, Hashable {
         return prizeTiers.first ?? 0
     }
     
+    // Computed properties for financial calculations
+    var totalPrizePool: Decimal {
+        return prizeTiers.reduce(0, +)
+    }
+    
+    var estimatedProfit: Decimal {
+        let totalRevenue = entryPriceSoles * Decimal(maxPlayers)
+        return totalRevenue - totalPrizePool
+    }
+    
     init(title: String, maxPlayers: Int, entryPriceSoles: Decimal, prizeTiers: [Decimal], maxWinners: Int = 1, repetitions: Int = 1, order: Int = 0) {
         self.id = UUID()
         self.title = title

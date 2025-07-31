@@ -80,6 +80,7 @@ struct PlayerEntryView: View {
         .onDisappear {
             // Clear focus when view disappears to prevent keyboard issues
             isTextFieldFocused = false
+            newPlayerName = "" // Reset the text field
         }
     }
     
@@ -93,16 +94,22 @@ struct PlayerEntryView: View {
                 dismiss()
             }) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(
+                        size: UIDevice.isIPad ? 26 : 20, 
+                        weight: .semibold
+                    ))
                     .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(
+                        width: AdaptiveSize.minimumTouchTarget(), 
+                        height: AdaptiveSize.minimumTouchTarget()
+                    )
             }
             
             Spacer()
             
             // Title - now shows game mode name
             Text(viewModel.selectedGameMode.title)
-                .font(.title2)
+                .font(UIDevice.isIPad ? .largeTitle : .title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
@@ -148,9 +155,15 @@ struct PlayerEntryView: View {
                     )
             }
             
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+            // Test generation buttons for easy testing
+            testGenerationButtons
             
-            LazyVGrid(columns: columns, spacing: 12) {
+            let columnCount = UIDevice.isIPad ? 
+                (UIScreen.screenWidth > 1000 ? 8 : 6) : 5
+            let spacing: CGFloat = UIDevice.isIPad ? 16 : 12
+            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
+            
+            LazyVGrid(columns: columns, spacing: spacing) {
                 ForEach(1...gameMode.maxPlayers, id: \.self) { number in
                     NumberAssignmentCard(
                         number: number,
@@ -162,6 +175,93 @@ struct PlayerEntryView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Test Generation Buttons
+    private var testGenerationButtons: some View {
+        HStack(spacing: 12) {
+            // Generate test players button
+            Button(action: {
+                viewModel.generateTestPlayers()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.3.fill")
+                        .font(.caption)
+                    Text("Generar Jugadores de Prueba")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.blue.opacity(0.7))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.blue.opacity(0.8), lineWidth: 1)
+                )
+            }
+            .disabled(viewModel.remainingSlots == 0)
+            .opacity(viewModel.remainingSlots == 0 ? 0.5 : 1.0)
+            
+            // Generate fewer test players button (for quick testing)
+            Button(action: {
+                viewModel.generateTestPlayers(count: min(5, viewModel.remainingSlots))
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2.fill")
+                        .font(.caption)
+                    Text("5")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.cyan.opacity(0.7))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.cyan.opacity(0.8), lineWidth: 1)
+                )
+            }
+            .disabled(viewModel.remainingSlots == 0)
+            .opacity(viewModel.remainingSlots == 0 ? 0.5 : 1.0)
+            
+            Spacer()
+            
+            // Clear all players button
+            if !viewModel.players.isEmpty {
+                Button(action: {
+                    viewModel.clearAllTestData()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash.fill")
+                            .font(.caption)
+                        Text("Limpiar Todo")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.red.opacity(0.7))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.red.opacity(0.8), lineWidth: 1)
+                )
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.players.isEmpty)
     }
     
     // MARK: - Game Mode Card
@@ -273,6 +373,34 @@ struct PlayerEntryView: View {
         }
         .presentationDetents([.height(500)])
         .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled)
+        .interactiveDismissDisabled(false)
+        .onAppear {
+            // Initialize with existing player name if any
+            if let existingPlayer = getPlayerForNumber(number) {
+                newPlayerName = existingPlayer.firstName
+            } else {
+                newPlayerName = ""
+            }
+            
+            // Force keyboard appearance with multiple strategies
+            DispatchQueue.main.async {
+                isTextFieldFocused = true
+            }
+        }
+        .task {
+            // Additional attempt using task modifier which runs after view appears
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            await MainActor.run {
+                isTextFieldFocused = true
+            }
+            
+            // Final attempt after longer delay
+            try? await Task.sleep(nanoseconds: 400_000_000) // 0.4 seconds  
+            await MainActor.run {
+                isTextFieldFocused = true
+            }
+        }
     }
     
     // MARK: - Modal Header
@@ -360,39 +488,46 @@ struct PlayerEntryView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
             
-            TextField("Ingresa el nombre...", text: $newPlayerName)
-                .font(.body)
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.15))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
-                )
-                .focused($isTextFieldFocused)
-                .submitLabel(.done)
-                .onSubmit {
-                    if !newPlayerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        assignPlayerToNumber(number)
-                    }
+            ZStack(alignment: .leading) {
+                // Custom placeholder text
+                if newPlayerName.isEmpty {
+                    Text("Ingresa el nombre...")
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .allowsHitTesting(false)
                 }
-                .onAppear {
-                    // Initialize with existing player name if any
-                    if let existingPlayer = getPlayerForNumber(number) {
-                        newPlayerName = existingPlayer.firstName
-                    } else {
-                        newPlayerName = ""
+                
+                TextField("", text: $newPlayerName)
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .tint(.white.opacity(0.8)) // Cursor color
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .focused($isTextFieldFocused) // Focus applied directly to TextField
+                    .keyboardType(.default)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled(false)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        if !newPlayerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            assignPlayerToNumber(number)
+                        }
                     }
-                    
-                    // Auto-focus the text field when modal appears
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    .onTapGesture {
+                        // Force focus when tapped
                         isTextFieldFocused = true
                     }
-                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                    )
+            )
         }
     }
     
@@ -466,19 +601,21 @@ struct PlayerEntryView: View {
                     HStack {
                         Image(systemName: "play.fill")
                             .foregroundColor(.white)
+                            .font(UIDevice.isIPad ? .title2 : .body)
                         
                         Text("Empezar (\(viewModel.players.count) jugadores)")
                             .foregroundColor(.white)
-                            .font(.headline)
+                            .font(UIDevice.isIPad ? .title2 : .headline)
                             .fontWeight(.semibold)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                    .frame(maxWidth: UIDevice.isIPad ? 500 : .infinity) // Limit width on iPad like home page
+                    .frame(height: AdaptiveSize.buttonHeight())
                     .background(startButtonBackground)
                     .cornerRadius(16)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 34) // Safe area bottom
+                .frame(maxWidth: .infinity) // Center the constrained button
+                .adaptivePadding(iPadPadding: 32, iPhonePadding: 16)
+                .padding(.bottom, UIDevice.isIPad ? 44 : 34) // Safe area bottom
                 .transition(.asymmetric(
                     insertion: .move(edge: .bottom)
                         .combined(with: .scale(scale: 0.8))
@@ -578,17 +715,23 @@ struct NumberAssignmentCard: View {
             VStack(spacing: 8) {
                 // Number circle
                 ZStack {
+                    let circleSize: CGFloat = UIDevice.isIPad ? 65 : 50
+                    
                     Circle()
                         .fill(numberBackgroundGradient)
-                        .frame(width: 50, height: 50)
+                        .frame(width: circleSize, height: circleSize)
                         .shadow(color: shadowColor, radius: 4, x: 0, y: 2)
                     
                     Circle()
                         .stroke(borderColor, lineWidth: 2)
-                        .frame(width: 50, height: 50)
+                        .frame(width: circleSize, height: circleSize)
                     
                     Text("\(number)")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(
+                            size: UIDevice.isIPad ? 24 : 18, 
+                            weight: .bold, 
+                            design: .rounded
+                        ))
                         .foregroundColor(.white)
                 }
                 
@@ -606,7 +749,7 @@ struct NumberAssignmentCard: View {
                         // Player avatar
                         AvatarImageView(
                             avatarURL: player.avatarURL,
-                            size: 35
+                            size: UIDevice.isIPad ? 45 : 35
                         )
                         .clipShape(Circle())
                         .overlay(
@@ -625,7 +768,10 @@ struct NumberAssignmentCard: View {
                         // Placeholder for avatar space
                         Circle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(width: 35, height: 35)
+                            .frame(
+                                width: UIDevice.isIPad ? 45 : 35, 
+                                height: UIDevice.isIPad ? 45 : 35
+                            )
                             .overlay(
                                 Image(systemName: "person.crop.circle.badge.plus")
                                     .font(.system(size: 16))
@@ -634,7 +780,7 @@ struct NumberAssignmentCard: View {
                     }
                 }
             }
-            .frame(height: 120)
+            .frame(height: UIDevice.isIPad ? 150 : 120)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12)

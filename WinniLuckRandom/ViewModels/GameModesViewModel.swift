@@ -91,7 +91,7 @@ class GameModesViewModel: ObservableObject {
         // Delete all game modes from storage
         let currentModes = await StorageManager.shared.fetchGameModes()
         for mode in currentModes {
-            await StorageManager.shared.deleteGameMode(mode)
+            _ = await StorageManager.shared.deleteGameMode(mode)
         }
         
         // Force reload which will create new defaults with proper order
@@ -106,35 +106,27 @@ class GameModesViewModel: ObservableObject {
         
         print("📋 Loading game modes...")
         
-        do {
-            let modes = await StorageManager.shared.fetchGameModes()
+        let modes = await StorageManager.shared.fetchGameModes()
+        
+        await MainActor.run {
+            let sortedModes = modes.sorted { $0.order < $1.order }
             
-            await MainActor.run {
-                let sortedModes = modes.sorted { $0.order < $1.order }
-                
-                // Debug logging
-                print("📋 Raw game modes loaded:")
-                for mode in modes {
-                    print("  - \(mode.title): order = \(mode.order)")
-                }
-                print("📋 Sorted game modes:")
-                for mode in sortedModes {
-                    print("  - \(mode.title): order = \(mode.order)")
-                }
-                
-                self.gameModes = sortedModes
-                self.lastLoadTime = Date()
-                self.isLoading = false
+            // Debug logging
+            print("📋 Raw game modes loaded:")
+            for mode in modes {
+                print("  - \(mode.title): order = \(mode.order)")
+            }
+            print("📋 Sorted game modes:")
+            for mode in sortedModes {
+                print("  - \(mode.title): order = \(mode.order)")
             }
             
-            print("📋 Loaded \(modes.count) game modes successfully")
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load game modes: \(error.localizedDescription)"
-                self.isLoading = false
-            }
-            print("📋 Failed to load game modes: \(error)")
+            self.gameModes = sortedModes
+            self.lastLoadTime = Date()
+            self.isLoading = false
         }
+        
+        print("📋 Loaded \(modes.count) game modes successfully")
     }
     
     func saveGameMode() async {

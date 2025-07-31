@@ -178,7 +178,7 @@ struct CongratulationsView: View {
             
             // Start game button
             Button(action: {
-                if let selectedMode = selectedGameMode {
+                if selectedGameMode != nil {
                     showingPlayerEntry = true
                 }
             }) {

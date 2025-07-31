@@ -1,44 +1,48 @@
 import SwiftUI
+import UIKit
 
 struct GameHistoryView: View {
     @StateObject private var viewModel = GameHistoryViewModel()
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Beautiful gradient background matching dashboard
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.1, green: 0.2, blue: 0.4),
-                        Color(red: 0.2, green: 0.3, blue: 0.6),
-                        Color(red: 0.1, green: 0.1, blue: 0.3)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+        ZStack {
+            // Beautiful gradient background matching dashboard
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.1, green: 0.2, blue: 0.4),
+                    Color(red: 0.2, green: 0.3, blue: 0.6),
+                    Color(red: 0.1, green: 0.1, blue: 0.3)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Custom header
+                gameHistoryHeader
                 
-                VStack(spacing: 0) {
-                    // Custom header
-                    gameHistoryHeader
-                    
-                    // Content
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            contentView
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 100)
+                // Content
+                ScrollView {
+                    VStack(spacing: UIDevice.isIPad ? 30 : 20) {
+                        contentView
                     }
+                    .padding(.horizontal, UIDevice.isIPad ? 40 : 20)
+                    .padding(.top, UIDevice.isIPad ? 30 : 20)
+                    .padding(.bottom, UIDevice.isIPad ? 120 : 100)
                 }
             }
-            .navigationTitle("")
-            .navigationBarHidden(true)
         }
+        .navigationTitle("")
+        .navigationBarHidden(true)
         .task {
+            print("🔍 GameHistoryView: Task started, loading game sessions...")
             viewModel.loadGameSessions()
+        }
+        .onAppear {
+            print("🔍 GameHistoryView: View appeared")
+            print("🔍 GameHistoryView: Current state - Loading: \(viewModel.isLoading), Sessions count: \(viewModel.gameSessions.count)")
         }
         .onChange(of: viewModel.sortOrder) { _, _ in
             viewModel.loadGameSessions()
@@ -103,18 +107,18 @@ struct GameHistoryView: View {
                 )
                 .frame(maxWidth: 200)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
+            .padding(.horizontal, UIDevice.isIPad ? 40 : 20)
+            .padding(.top, UIDevice.isIPad ? 15 : 10)
             
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: UIDevice.isIPad ? 8 : 4) {
                     Text("Historial de Juegos")
-                        .font(.largeTitle)
+                        .font(UIDevice.isIPad ? .system(size: 48, weight: .bold) : .largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                     
                     Text("Todos tus juegos completados")
-                        .font(.subheadline)
+                        .font(UIDevice.isIPad ? .title3 : .subheadline)
                         .foregroundColor(.white.opacity(0.8))
                 }
                 
@@ -138,7 +142,7 @@ struct GameHistoryView: View {
                         )
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, UIDevice.isIPad ? 40 : 20)
         }
         .padding(.bottom, 10)
         .background(
@@ -204,6 +208,36 @@ struct GameHistoryView: View {
                     .foregroundColor(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
+            
+            // Debug info and manual reload button
+            VStack(spacing: 12) {
+                Text("Debug: Loading=\(viewModel.isLoading ? "Yes" : "No"), Count=\(viewModel.gameSessions.count)")
+                    .font(.caption)
+                    .foregroundColor(.yellow)
+                
+                Button("Recargar Datos") {
+                    print("🔄 Manual reload triggered")
+                    viewModel.loadGameSessions()
+                }
+                
+                Button("Generar Datos de Prueba") {
+                    print("🧪 Generating test data...")
+                    viewModel.generateTestData()
+                }
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.green.opacity(0.3))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.green.opacity(0.5), lineWidth: 1)
+                        )
+                )
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
@@ -217,12 +251,27 @@ struct GameHistoryView: View {
         )
     }
     
+    @ViewBuilder
     private var modernSessionsList: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(viewModel.gameSessions) { session in
-                ModernHistoryGameSessionCard(session: session, onDelete: {
-                    viewModel.deleteGameSession(session)
-                })
+        // Use grid layout on iPad, vertical stack on iPhone
+        if UIDevice.isIPad {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 2),
+                spacing: 16
+            ) {
+                ForEach(viewModel.gameSessions) { session in
+                    ModernHistoryGameSessionCard(session: session, onDelete: {
+                        viewModel.deleteGameSession(session)
+                    })
+                }
+            }
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(viewModel.gameSessions) { session in
+                    ModernHistoryGameSessionCard(session: session, onDelete: {
+                        viewModel.deleteGameSession(session)
+                    })
+                }
             }
         }
     }

@@ -19,6 +19,7 @@ struct ResultView: View {
     @State private var displayedNumber: Int = 0
     @State private var randomizationTimer: Timer?
     @State private var brandingScale: CGFloat = 1.0
+    @State private var isWaitingForSpeech = false
     @Environment(\.dismiss) var dismiss
     
     private var prizeTitle: String {
@@ -89,8 +90,8 @@ struct ResultView: View {
                             currentNumber: viewModel.currentNumber,
                             currentNumberCount: viewModel.numberCounts[viewModel.currentNumber] ?? 0,
                             numberCounts: viewModel.numberCounts,
-                            targetRepetitions: viewModel.currentGameMode?.repetitions ?? Int(viewModel.repetitions) ?? 1,
-                            numbersDrawn: viewModel.currentRepetition,
+                            targetRepetitions: viewModel.getTargetRepetitions(), // FIXED: Use consistent logic
+                            numbersDrawn: viewModel.confirmedNumbersCount,
                             totalNumbers: viewModel.totalRepetitions,
                             isCompletingRace: viewModel.isCompletingRace
                         )
@@ -188,34 +189,112 @@ struct ResultView: View {
         }
         .confetti(trigger: showConfetti)
         .onAppear {
-            // Start with randomization for the first number
-            startFirstNumberAnimation()
+            print("📱📱📱 RESULTVIEW APPEARED 📱📱📱")
+            print("📱 ViewModel currentNumber: \(viewModel.currentNumber)")
+            print("📱 ViewModel gameIsReady: \(viewModel.gameIsReady)")
+            print("📱 ViewModel generatedNumbers count: \(viewModel.generatedNumbers.count)")
+            print("📱 ViewModel generatedNumbers: \(viewModel.generatedNumbers)")
+            print("📱 Current displayedNumber: \(displayedNumber)")
+            
+            // Clean up any existing timers first
+            stopTimer()
+            stopRandomizationTimer()
+            
+            // FALLBACK: If game isn't ready and has no generated numbers, initialize it
+            if !viewModel.gameIsReady && viewModel.generatedNumbers.isEmpty {
+                print("⚠️ Game not initialized - calling startGameAfterCountdown as fallback")
+                viewModel.startGameAfterCountdown()
+            }
+            
+            // CRITICAL: Ensure displayedNumber matches viewModel if it's not 0
+            if viewModel.currentNumber != 0 && displayedNumber == 0 {
+                print("🔧 FIXING: displayedNumber was 0, setting to ViewModel currentNumber: \(viewModel.currentNumber)")
+                displayedNumber = viewModel.currentNumber
+            }
+            
+            // Start basic animations
             animateEntrance()
-            startAutoAdvanceTimer()
             startBrandingAnimation()
+            
+            // CRITICAL: If game is already ready, start the game flow immediately
+            if viewModel.gameIsReady {
+                print("🚨 Game is ALREADY ready on appear - starting game flow immediately")
+                
+                // Clean up any existing timers first
+                stopTimer()
+                stopRandomizationTimer()
+                
+                // CRITICAL: Ensure displayedNumber is set to current number before animation
+                if displayedNumber == 0 && viewModel.currentNumber != 0 {
+                    print("🔧 FIXING in onAppear gameReady: displayedNumber was 0, setting to \(viewModel.currentNumber)")
+                    displayedNumber = viewModel.currentNumber
+                }
+                
+                // Start the first number animation and game flow
+                print("🎮 onAppear: About to call startFirstNumberAnimation()")
+                startFirstNumberAnimation()
+                
+                // Start auto-advance timer
+                print("🎮 onAppear: About to call startAutoAdvanceTimer()")
+                startAutoAdvanceTimer()
+            }
         }
         .onChange(of: viewModel.isNewGameStarting) { _, isStarting in
             // When a new game is starting, restart animations
             if isStarting {
+                print("🔄 New game starting - resetting animation states only")
+                
+                // Clean up existing timers
+                stopTimer()
+                stopRandomizationTimer()
+                
                 // Reset animation states
                 coinScale = 0.8
                 coinRotation = 0
                 showConfetti = false
+                displayedNumber = viewModel.currentNumber
+                isRandomizing = false
                 
-                // Clear the flag
-                viewModel.isNewGameStarting = false
+                // Only start basic animations - main game flow starts when gameIsReady
+                animateEntrance()
+                startBrandingAnimation()
+            }
+        }
+        .onChange(of: viewModel.gameIsReady) { _, isReady in
+            // Start complete game flow ONLY after game is properly initialized
+            if isReady {
+                print("🎮🎮🎮 GAME IS READY - STARTING COMPLETE GAME FLOW 🎮🎮🎮")
+                print("🎮 Current number from ViewModel: \(viewModel.currentNumber)")
+                print("🎮 Generated numbers count: \(viewModel.generatedNumbers.count)")
+                print("🎮 Has next number: \(viewModel.hasNextNumber)")
+                print("🎮 Settings voice enabled: \(settings.voiceEnabled)")
                 
-                // Restart the game animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    startFirstNumberAnimation()
-                    animateEntrance()
-                    startAutoAdvanceTimer()
+                // Clean up any existing timers first
+                stopTimer()
+                stopRandomizationTimer()
+                
+                // CRITICAL: Ensure displayedNumber is set to current number before animation
+                if displayedNumber == 0 && viewModel.currentNumber != 0 {
+                    print("🔧 FIXING in gameIsReady: displayedNumber was 0, setting to \(viewModel.currentNumber)")
+                    displayedNumber = viewModel.currentNumber
                 }
+                
+                // Start the first number animation and game flow
+                print("🎮 About to call startFirstNumberAnimation()")
+                startFirstNumberAnimation()
+                
+                // Start auto-advance timer
+                print("🎮 About to call startAutoAdvanceTimer()")
+                startAutoAdvanceTimer()
+            } else {
+                print("🎮 Game is NOT ready yet - isReady: \(isReady)")
             }
         }
         .onDisappear {
             stopTimer()
             stopRandomizationTimer()
+            // REMOVED: The reset call that was causing loops
+            print("📱 ResultView disappeared - timers stopped")
         }
         .fullScreenCover(isPresented: $viewModel.showingWinners) {
             CongratulationsView(
@@ -262,7 +341,6 @@ struct ResultView: View {
                     // Reset game state
                     viewModel.numbers = []
                     viewModel.currentNumber = 0
-                    viewModel.currentRepetition = 0
                     viewModel.totalRepetitions = 1
                     viewModel.isGenerating = false
                     viewModel.showingWinners = false
@@ -272,6 +350,9 @@ struct ResultView: View {
                 },
                 settings: settings
             )
+        }
+        .fullScreenCover(isPresented: $viewModel.showingCountdown) {
+            CountdownView(viewModel: viewModel, settings: settings)
         }
     }
     
@@ -290,13 +371,20 @@ struct ResultView: View {
     }
     
     private func nextNumber() {
+        print("🔥 ResultView.nextNumber() CALLED")
         // Reset animations
         coinScale = 0.8
         coinRotation = 0
         showConfetti = false
         
+        // CRITICAL: Stop any existing randomization timer first
+        stopRandomizationTimer()
+        
         // Update number in view model
         viewModel.nextNumber()
+        
+        // IMPORTANT: Immediately set displayedNumber to prevent display lag
+        displayedNumber = viewModel.currentNumber
         
         // Start randomization animation
         startRandomizationAnimation()
@@ -310,8 +398,10 @@ struct ResultView: View {
             coinRotation = 360
         }
         
-        // Show final number after randomization
+        // Show final number after randomization with guaranteed correct value
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            // CRITICAL: Ensure randomization stops and correct number is displayed
+            stopRandomizationTimer()
             displayedNumber = viewModel.currentNumber
             isRandomizing = false
             
@@ -320,42 +410,94 @@ struct ResultView: View {
                 showConfetti = true
             }
             
-            // Speak number
+            // Speak number with the EXACT current number to prevent 6/9 confusion
+            print("🎤 nextNumber() - Voice enabled: \(settings.voiceEnabled)")
             if settings.voiceEnabled {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    speechHelper.speakNumber(viewModel.currentNumber)
+                let numberToSpeak = viewModel.currentNumber
+                print("🎤 nextNumber() - Will speak number \(numberToSpeak) in 1.5 seconds")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { // Adjusted to sync with progress bar middle in 4-second cycle
+                    print("🎤 nextNumber() - About to call speechHelper.speakNumber(\(numberToSpeak))")
+                    isWaitingForSpeech = true
+                    speechHelper.speakNumber(numberToSpeak) {
+                        // CRITICAL: Only confirm AFTER speech actually completes successfully
+                        print("🎯 Speech completed, confirming on progress bar")
+                        isWaitingForSpeech = false
+                        viewModel.confirmPendingNumber()
+                        
+                        // Check for winners AFTER the number is confirmed on progress bar
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            if viewModel.shouldStopGame() {
+                                stopTimer()
+                                // REMOVED: speechHelper.stopSpeaking() - Let final announcement complete
+                                print("🏁 Game stopping due to sufficient winners - allowing final speech to complete")
+                                startCompletionAnimation()
+                            }
+                        }
+                    }
+                }
+            } else {
+                print("🎤 nextNumber() - Voice is DISABLED - confirming immediately")
+                // If voice is disabled, confirm immediately
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("🎯 Voice disabled, confirming number \(viewModel.currentNumber)")
+                    viewModel.confirmPendingNumber()
+                    
+                    // Check for winners AFTER the number is confirmed on progress bar
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        if viewModel.shouldStopGame() {
+                            stopTimer()
+                            // REMOVED: speechHelper.stopSpeaking() - Let final announcement complete
+                            print("🏁 Game stopping due to sufficient winners (voice disabled)")
+                            startCompletionAnimation()
+                        }
+                    }
                 }
             }
             
-            // Check if we have enough winners at the finish line after this number
-            if viewModel.shouldStopGame() {
-                stopTimer()
-                // Stop any ongoing speech immediately
-                speechHelper.stopSpeaking()
-                // Start the completion animation - winners have reached finish line
-                startCompletionAnimation()
-            }
+            // Removed old winner check here - now handled properly after speech completion
         }
     }
     
     private func startAutoAdvanceTimer() {
-        // Start timer after initial entrance animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+        // Prevent multiple timers
+        if autoAdvanceTimer != nil {
+            print("🕐 Timer already running - skipping start")
+            return
+        }
+        
+        print("🕐 Starting auto-advance timer")
+        // Give first number 6 seconds to complete, then advance every 6 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+            print("🕐 Timer initial delay complete - starting repeating timer")
+            if autoAdvanceTimer == nil { // Double check before creating
+                autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { _ in
+                print("🕐 Timer tick - checking game state")
+                print("  - Number: \(viewModel.currentNumber), Index: \(viewModel.currentIndex)")
+                print("  - Confirmed: \(viewModel.confirmedNumbersCount), HasNext: \(viewModel.hasNextNumber)")
+                
                 // Check if we have enough winners at the finish line
-                if viewModel.shouldStopGame() {
+                let shouldStop = viewModel.shouldStopGame()
+                print("🏁 Should stop game: \(shouldStop)")
+                
+                if shouldStop {
+                    print("🏁 Auto-advance timer stopping game")
                     stopTimer()
                     speechHelper.stopSpeaking()
                     // Start the completion animation - winners have reached finish line
                     startCompletionAnimation()
                 } else if viewModel.hasNextNumber {
+                    print("🎲 Auto-advance timer moving to next number")
                     nextNumber()
                 } else {
+                    print("🏁 Auto-advance timer: No more numbers, ending game")
+                    print("  - Final check - generated numbers: \(viewModel.generatedNumbers)")
+                    print("  - Final check - current index: \(viewModel.currentIndex)")
                     stopTimer()
                     speechHelper.stopSpeaking()
                     // Start the completion animation when we naturally reach the end
                     startCompletionAnimation()
                 }
+            }
             }
         }
     }
@@ -386,14 +528,36 @@ struct ResultView: View {
     private func stopRandomizationTimer() {
         randomizationTimer?.invalidate()
         randomizationTimer = nil
+        // IMPORTANT: Also ensure isRandomizing is set to false to prevent UI issues
+        isRandomizing = false
     }
     
     private func startFirstNumberAnimation() {
+        print("🎲🎲🎲 STARTING FIRST NUMBER ANIMATION 🎲🎲🎲")
+        print("🎲 Current ViewModel number: \(viewModel.currentNumber)")
+        print("🎲 Current displayedNumber: \(displayedNumber)")
+        print("🎲 ViewModel startNumber: \(viewModel.startNumber)")
+        print("🎲 ViewModel endNumber: \(viewModel.endNumber)")
+        
+        // CRITICAL: Always ensure displayedNumber is set
+        displayedNumber = viewModel.currentNumber
+        print("🔧 Set displayedNumber to \(displayedNumber) from ViewModel")
+        
         guard let start = Int(viewModel.startNumber),
               let end = Int(viewModel.endNumber) else { 
-            displayedNumber = viewModel.currentNumber
+            print("❌ ERROR: Invalid start/end numbers - keeping current number")
             return 
         }
+        
+        // CRITICAL: Ensure no existing timers
+        stopRandomizationTimer()
+        
+        // IMPORTANT: Set initial correct number and pending state
+        displayedNumber = viewModel.currentNumber
+        
+        // CRITICAL: Set this number as pending confirmation
+        viewModel.setPendingNumber(viewModel.currentNumber)
+        print("🔥 Setting pendingNumber to \(viewModel.currentNumber) in startFirstNumberAnimation")
         
         isRandomizing = true
         
@@ -404,28 +568,62 @@ struct ResultView: View {
         
         // Show final number after 1 second and trigger effects
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            // CRITICAL: Ensure randomization stops and correct number is displayed
+            print("🎲 Animation complete - setting final number")
+            print("🎲 Before: displayedNumber = \(displayedNumber)")
+            print("🎲 ViewModel currentNumber = \(viewModel.currentNumber)")
             stopRandomizationTimer()
             displayedNumber = viewModel.currentNumber
             isRandomizing = false
+            print("🎲 After: displayedNumber = \(displayedNumber)")
             
             // Trigger confetti after revealing the number
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showConfetti = true
             }
             
-            // Speak the first number
+            // Speak the first number with proper timing (when it reaches middle of progress bar)
+            print("🎤 Voice enabled: \(settings.voiceEnabled)")
             if settings.voiceEnabled {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    speechHelper.speakNumber(viewModel.currentNumber)
+                let numberToSpeak = viewModel.currentNumber
+                print("🎤 Will speak number \(numberToSpeak) in 1.5 seconds")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { // Better timing to sync with progress bar middle
+                    print("🎤 About to call speechHelper.speakNumber(\(numberToSpeak))")
+                    isWaitingForSpeech = true
+                    speechHelper.speakNumber(numberToSpeak) {
+                        // CRITICAL: Only confirm AFTER speech actually completes successfully
+                        print("🎯 First number speech completed, confirming on progress bar")
+                        isWaitingForSpeech = false
+                        viewModel.confirmPendingNumber()
+                        
+                        // Check for winners AFTER the number is confirmed on progress bar
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            if viewModel.shouldStopGame() {
+                                speechHelper.stopSpeaking()
+                                print("🏁 First number already created enough winners!")
+                                startCompletionAnimation()
+                            }
+                        }
+                    }
+                }
+            } else {
+                print("🎤 Voice is DISABLED - confirming immediately")
+                // If voice is disabled, confirm immediately
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("🎯 Voice disabled, confirming first number \(viewModel.currentNumber)")
+                    viewModel.confirmPendingNumber()
+                    
+                    // Check for winners AFTER the number is confirmed on progress bar
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        if viewModel.shouldStopGame() {
+                            print("🏁 First number already created enough winners! (voice disabled)")
+                            startCompletionAnimation()
+                        }
+                    }
                 }
             }
             
-            // Check if we have enough winners at the finish line immediately
-            if viewModel.shouldStopGame() {
-                speechHelper.stopSpeaking()
-                // Start the completion animation - winners have reached finish line
-                startCompletionAnimation()
-            }
+            // Removed old winner check here - now handled properly after speech completion
         }
     }
     
@@ -439,8 +637,12 @@ struct ResultView: View {
     }
     
     private func startCompletionAnimation() {
-        // Give 1.5 seconds to see the winners at the finish line and celebrate
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        // Enhanced delay to allow:
+        // 1. Voice announcement to complete (3 seconds)
+        // 2. Progress bar animation to finish (0.8 seconds from .easeInOut)
+        // 3. Small buffer for visual confirmation (0.7 seconds)
+        // Total: 4.5 seconds for smooth final winner experience
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
             viewModel.finalizeGame()
         }
     }
@@ -452,6 +654,15 @@ struct ResultView: View {
         return viewModel.currentPlayers.first { player in
             player.selectedNumber == number
         }
+    }
+    
+    private func hasConsecutiveDuplicates(_ array: [Int]) -> Bool {
+        for i in 0..<array.count - 1 {
+            if array[i] == array[i + 1] {
+                return true
+            }
+        }
+        return false
     }
 }
 
@@ -663,7 +874,7 @@ struct SingleProgressView: View {
     }
     
     private var racingNumbers: [RacingNumber] {
-        // Get ALL numbers that have been called (not limited to 8)
+        // Get ALL numbers that have been called - NEVER filter out winners
         return numberCounts
             .filter { $0.value > 0 } // Only numbers that have been called
             .map { (number, count) in
@@ -673,7 +884,18 @@ struct SingleProgressView: View {
                     isCurrentNumber: number == currentNumber
                 )
             }
-            .sorted { $0.number < $1.number } // Sort by number for consistent display
+            .sorted { first, second in
+                // Sort by: winners at finish line first, then by count, then by number
+                if first.count == targetRepetitions && second.count != targetRepetitions {
+                    return false // Winner goes after others for better visibility
+                } else if first.count != targetRepetitions && second.count == targetRepetitions {
+                    return true // Non-winner goes before winner
+                } else if first.count != second.count {
+                    return first.count < second.count // Sort by count
+                } else {
+                    return first.number < second.number // Sort by number as tiebreaker
+                }
+            }
     }
     
     var body: some View {
@@ -823,14 +1045,31 @@ struct SingleProgressView: View {
     }
     
     private func calculatePositionOnBar(for racingNumber: RacingNumber, in availableWidth: CGFloat) -> CGFloat {
-        // Position numbers on the progress bar based on their call count toward target repetitions
-        // This creates natural racing progression: 1st call → start, 2nd call → middle, target call → finish
-        let progress = Double(racingNumber.count - 1) / Double(max(targetRepetitions - 1, 1))
-        let basePosition = CGFloat(progress) * availableWidth - (availableWidth / 2)
+        // CRITICAL: Winners at target repetitions MUST stay at finish line
+        if racingNumber.count >= targetRepetitions {
+            // Winners always go to the finish line (right end)
+            let finishPosition = availableWidth / 2 - 30 // Slightly before the very end for better visibility
+            
+            // Get all winners for clustering
+            let allWinners = numberCounts.filter { $0.value >= targetRepetitions }.keys.sorted()
+            guard let index = allWinners.firstIndex(of: racingNumber.number) else { 
+                return finishPosition 
+            }
+            
+            // Cluster winners at finish line with small offsets
+            let clusterOffset = CGFloat(index - allWinners.count / 2) * 6.0
+            return finishPosition + clusterOffset
+        }
         
-        // Get all numbers with the same count for better clustering
-        let numbersWithSameCount = numberCounts.filter { $0.value == racingNumber.count }.keys.sorted()
-        guard let index = numbersWithSameCount.firstIndex(of: racingNumber.number) else { return basePosition }
+        // Non-winners: Position based on progress toward target repetitions
+        let progress = Double(racingNumber.count - 1) / Double(max(targetRepetitions - 1, 1))
+        let basePosition = CGFloat(progress) * (availableWidth - 60) - (availableWidth / 2) + 30
+        
+        // Get all numbers with the same count for clustering
+        let numbersWithSameCount = numberCounts.filter { $0.value == racingNumber.count && $0.value < targetRepetitions }.keys.sorted()
+        guard let index = numbersWithSameCount.firstIndex(of: racingNumber.number) else { 
+            return basePosition 
+        }
         
         // Create horizontal clustering with gentle spread
         let clusterOffset = CGFloat(index - numbersWithSameCount.count / 2) * 4.0

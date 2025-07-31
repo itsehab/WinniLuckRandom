@@ -44,14 +44,14 @@ class DashboardViewModel: ObservableObject {
         }
     }
     
-    nonisolated init(statsService: StatsService? = nil, storageManager: StorageManager? = nil) {
+    @MainActor init(statsService: StatsService? = nil, storageManager: StorageManager? = nil) {
         self.statsService = statsService ?? StatsService.shared
         self.storageManager = storageManager ?? StorageManager.shared
         
         // Move setup to a task to handle main actor properly
         Task { @MainActor in
             setupAutoRefresh()
-            refreshData()
+        refreshData()
         }
     }
     
@@ -64,13 +64,13 @@ class DashboardViewModel: ObservableObject {
         error = nil
         
         Task {
-            // Load stats based on selected time filter
+                // Load stats based on selected time filter
             let summary = await statsService.calculateStats(
-                for: selectedTimeFilter,
-                startDate: customDateRange?.startDate,
-                endDate: customDateRange?.endDate
-            )
-            
+                    for: selectedTimeFilter,
+                    startDate: customDateRange?.startDate,
+                    endDate: customDateRange?.endDate
+                )
+                
             // Load all game sessions and modes
             let allSessions = await storageManager.fetchGameSessions()
             let allGameModes = await storageManager.fetchGameModes()
@@ -80,15 +80,15 @@ class DashboardViewModel: ObservableObject {
             
             // Calculate daily profit data for the last 30 days
             let dailyProfits = calculateDailyProfitData(from: allSessions)
-            
-            // Update UI on main thread
-            await MainActor.run {
-                self.stats = summary
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    self.stats = summary
                 self.recentGameSessions = Array(allSessions.prefix(10))
                 self.filteredGameSessions = filteredSessions
                 self.gameModes = allGameModes
                 self.dailyProfitData = dailyProfits
-                self.isLoading = false
+                    self.isLoading = false
                 
                 // Update error from storage manager if needed
                 if let storageError = self.storageManager.errorMessage {
@@ -188,6 +188,11 @@ class DashboardViewModel: ObservableObject {
         refreshData()
     }
     
+    func applyCustomDateFilter(startDate: Date, endDate: Date) {
+        let dateRange = DateRange(startDate: startDate, endDate: endDate)
+        updateCustomDateRange(dateRange)
+    }
+    
     private func setupAutoRefresh() {
         // Refresh data every 5 minutes
         Timer.publish(every: 300, on: .main, in: .common)
@@ -230,36 +235,36 @@ extension DashboardViewModel {
         
         // Mock data for preview
         Task { @MainActor in
-            viewModel.stats = StatsSummary(
-                totalGames: 15,
-                totalProfit: Decimal(850),
-                totalPayout: Decimal(1200),
-                totalGrossIncome: Decimal(2050),
-                uniquePlayers: 45,
-                repeatRate: 0.67,
-                averageProfit: Decimal(56.67),
-                averagePlayersPerGame: 8.5,
-                mostPopularGameMode: "Modo Básico",
-                timeFilter: .day,
-                startDate: nil,
-                endDate: nil
+        viewModel.stats = StatsSummary(
+            totalGames: 15,
+            totalProfit: Decimal(850),
+            totalPayout: Decimal(1200),
+            totalGrossIncome: Decimal(2050),
+            uniquePlayers: 45,
+            repeatRate: 0.67,
+            averageProfit: Decimal(56.67),
+            averagePlayersPerGame: 8.5,
+            mostPopularGameMode: "Modo Básico",
+            timeFilter: .day,
+            startDate: nil,
+            endDate: nil
+        )
+        
+        viewModel.recentGameSessions = [
+            GameSession(
+                modeID: UUID(),
+                startRange: 1,
+                endRange: 100,
+                repetitions: 1,
+                numWinners: 1,
+                playerIDs: [UUID(), UUID(), UUID()],
+                winningNumbers: [42],
+                winnerIDs: [UUID()],
+                grossIncome: Decimal(150),
+                profit: Decimal(50),
+                payout: Decimal(100)
             )
-            
-            viewModel.recentGameSessions = [
-                GameSession(
-                    modeID: UUID(),
-                    startRange: 1,
-                    endRange: 100,
-                    repetitions: 1,
-                    numWinners: 1,
-                    playerIDs: [UUID(), UUID(), UUID()],
-                    winningNumbers: [42],
-                    winnerIDs: [UUID()],
-                    grossIncome: Decimal(150),
-                    profit: Decimal(50),
-                    payout: Decimal(100)
-                )
-            ]
+        ]
         }
         
         return viewModel

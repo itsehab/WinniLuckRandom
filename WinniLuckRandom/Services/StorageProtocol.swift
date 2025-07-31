@@ -8,9 +8,9 @@
 import Foundation
 
 protocol StorageServiceProtocol: ObservableObject {
-    var isOnline: Bool { get }
-    var isInitialized: Bool { get }
-    var errorMessage: String? { get set }
+    nonisolated var isOnline: Bool { get set }
+    nonisolated var isInitialized: Bool { get set }
+    nonisolated var errorMessage: String? { get set }
     
     // MARK: - Player Operations
     func fetchPlayers() async -> [Player]

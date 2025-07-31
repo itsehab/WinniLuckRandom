@@ -19,9 +19,37 @@ class CloudKitService: StorageServiceProtocol {
     }
     
     // MARK: - Published Properties
-    @Published var isOnline = false
-    @Published var isInitialized = false
-    @Published var errorMessage: String?
+    @Published var _isOnline = false
+    @Published var _isInitialized = false
+    @Published var _errorMessage: String?
+    
+    // MARK: - Nonisolated Properties for Protocol Conformance
+    nonisolated var isOnline: Bool {
+        get {
+            MainActor.assumeIsolated { _isOnline }
+        }
+        set {
+            MainActor.assumeIsolated { _isOnline = newValue }
+        }
+    }
+    
+    nonisolated var isInitialized: Bool {
+        get {
+            MainActor.assumeIsolated { _isInitialized }
+        }
+        set {
+            MainActor.assumeIsolated { _isInitialized = newValue }
+        }
+    }
+    
+    nonisolated var errorMessage: String? {
+        get {
+            MainActor.assumeIsolated { _errorMessage }
+        }
+        set {
+            MainActor.assumeIsolated { _errorMessage = newValue }
+        }
+    }
     
     // MARK: - Cached Data
     @Published var players: [Player] = []
@@ -66,29 +94,29 @@ class CloudKitService: StorageServiceProtocol {
             await MainActor.run {
                 switch accountStatus {
                 case .available:
-                    isOnline = true
+                    _isOnline = true
                 case .noAccount:
-                    errorMessage = "Please sign in to iCloud in Settings"
-                    isOnline = false
+                    _errorMessage = "Please sign in to iCloud in Settings"
+                    _isOnline = false
                 case .restricted:
-                    errorMessage = "iCloud account is restricted"
-                    isOnline = false
+                    _errorMessage = "iCloud account is restricted"
+                    _isOnline = false
                 case .couldNotDetermine:
-                    errorMessage = "Could not determine iCloud account status"
-                    isOnline = false
+                    _errorMessage = "Could not determine iCloud account status"
+                    _isOnline = false
                 case .temporarilyUnavailable:
-                    errorMessage = "iCloud is temporarily unavailable"
-                    isOnline = false
+                    _errorMessage = "iCloud is temporarily unavailable"
+                    _isOnline = false
                 @unknown default:
-                    errorMessage = "Unknown iCloud account status"
-                    isOnline = false
+                    _errorMessage = "Unknown iCloud account status"
+                    _isOnline = false
                 }
             }
             
             // Only initialize data if online
             let isOnlineValue = await MainActor.run { isOnline }
             if isOnlineValue {
-                await initializeData()
+                initializeData()
             }
         } catch {
             await MainActor.run {
@@ -124,7 +152,7 @@ class CloudKitService: StorageServiceProtocol {
             }
             
             await MainActor.run {
-                isInitialized = true
+                _isInitialized = true
             }
         }
     }
@@ -164,7 +192,7 @@ class CloudKitService: StorageServiceProtocol {
             }
         } catch {
             await MainActor.run {
-                errorMessage = "Error fetching players: \(error.localizedDescription)"
+                _errorMessage = "Error fetching players: \(error.localizedDescription)"
             }
             return []
         }
@@ -187,7 +215,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error saving player: \(error.localizedDescription)"
+                _errorMessage = "Error saving player: \(error.localizedDescription)"
             }
             return false
         }
@@ -206,7 +234,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error deleting player: \(error.localizedDescription)"
+                _errorMessage = "Error deleting player: \(error.localizedDescription)"
             }
             return false
         }
@@ -237,7 +265,7 @@ class CloudKitService: StorageServiceProtocol {
             }
         } catch {
             await MainActor.run {
-                errorMessage = "Error fetching game modes: \(error.localizedDescription)"
+                _errorMessage = "Error fetching game modes: \(error.localizedDescription)"
             }
             return []
         }
@@ -260,7 +288,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error saving game mode: \(error.localizedDescription)"
+                _errorMessage = "Error saving game mode: \(error.localizedDescription)"
             }
             return false
         }
@@ -279,7 +307,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error deleting game mode: \(error.localizedDescription)"
+                _errorMessage = "Error deleting game mode: \(error.localizedDescription)"
             }
             return false
         }
@@ -310,7 +338,7 @@ class CloudKitService: StorageServiceProtocol {
             }
         } catch {
             await MainActor.run {
-                errorMessage = "Error fetching game sessions: \(error.localizedDescription)"
+                _errorMessage = "Error fetching game sessions: \(error.localizedDescription)"
             }
             return []
         }
@@ -333,7 +361,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error saving game session: \(error.localizedDescription)"
+                _errorMessage = "Error saving game session: \(error.localizedDescription)"
             }
             return false
         }
@@ -352,7 +380,7 @@ class CloudKitService: StorageServiceProtocol {
             return true
         } catch {
             await MainActor.run {
-                errorMessage = "Error deleting game session: \(error.localizedDescription)"
+                _errorMessage = "Error deleting game session: \(error.localizedDescription)"
             }
             return false
         }
@@ -372,7 +400,7 @@ class CloudKitService: StorageServiceProtocol {
     }
     
     func clearErrorMessage() {
-        errorMessage = nil
+        _errorMessage = nil
     }
     
     // MARK: - Default Data
@@ -422,18 +450,18 @@ extension CloudKitService {
         if let ckError = error as? CKError {
             switch ckError.code {
             case .networkUnavailable:
-                errorMessage = "Network unavailable. Please check your internet connection."
+                _errorMessage = "Network unavailable. Please check your internet connection."
             case .quotaExceeded:
-                errorMessage = "iCloud storage quota exceeded."
+                _errorMessage = "iCloud storage quota exceeded."
             case .requestRateLimited:
-                errorMessage = "Too many requests. Please try again later."
+                _errorMessage = "Too many requests. Please try again later."
             case .zoneNotFound:
-                errorMessage = "iCloud zone not found. Please try again."
+                _errorMessage = "iCloud zone not found. Please try again."
             default:
-                errorMessage = "CloudKit error: \(ckError.localizedDescription)"
+                _errorMessage = "CloudKit error: \(ckError.localizedDescription)"
             }
         } else {
-            errorMessage = "Unexpected error: \(error.localizedDescription)"
+            _errorMessage = "Unexpected error: \(error.localizedDescription)"
         }
     }
 } 

@@ -62,7 +62,7 @@ struct StatsSummary {
 // MARK: - Stats Service
 @MainActor
 class StatsService: ObservableObject {
-    static let shared = StatsService()
+    nonisolated static let shared = StatsService()
     
     @Published var currentStats: StatsSummary?
     @Published var isLoading = false
@@ -70,7 +70,7 @@ class StatsService: ObservableObject {
     private let storageManager = StorageManager.shared
     private let calendar = Calendar.current
     
-    init() {}
+    nonisolated init() {}
     
     // MARK: - Main Statistics Calculation
     func calculateStats(

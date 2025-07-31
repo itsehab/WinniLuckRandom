@@ -42,10 +42,10 @@ class GameHistoryViewModel: ObservableObject {
     private let storageManager: StorageManager
     private var cancellables = Set<AnyCancellable>()
     
-    init(storageManager: StorageManager = StorageManager.shared) {
-        self.storageManager = storageManager
+    @MainActor init(storageManager: StorageManager? = nil) {
+        self.storageManager = storageManager ?? StorageManager.shared
         setupFilteredSessions()
-        loadGameSessions()
+        // Don't load immediately in init, let the view trigger it
     }
     
     private func setupFilteredSessions() {
@@ -108,14 +108,74 @@ class GameHistoryViewModel: ObservableObject {
         isLoading = true
         error = nil
         
+        print("🔍 GameHistoryViewModel: Starting to load game sessions...")
+        
         Task {
             let sessions = await storageManager.fetchGameSessions()
+            print("🔍 GameHistoryViewModel: Fetched \(sessions.count) sessions from storage")
             
             await MainActor.run {
                 self.gameSessions = sessions
                 self.isLoading = false
+                print("🔍 GameHistoryViewModel: Updated UI with \(sessions.count) sessions")
             }
         }
+    }
+    
+    func generateTestData() {
+        print("🧪 GameHistoryViewModel: Generating test data...")
+        
+        let testSessions = [
+            GameSession(
+                id: UUID(),
+                modeID: UUID(),
+                startRange: 1,
+                endRange: 10,
+                repetitions: 3,
+                numWinners: 1,
+                playerIDs: [UUID(), UUID(), UUID()],
+                winningNumbers: [5],
+                winnerIDs: [UUID()],
+                date: Date().addingTimeInterval(-86400), // 1 day ago
+                grossIncome: Decimal(30.0),
+                profit: Decimal(20.0),
+                payout: Decimal(10.0)
+            ),
+            GameSession(
+                id: UUID(),
+                modeID: UUID(),
+                startRange: 1,
+                endRange: 20,
+                repetitions: 5,
+                numWinners: 2,
+                playerIDs: [UUID(), UUID(), UUID(), UUID(), UUID()],
+                winningNumbers: [3, 15],
+                winnerIDs: [UUID(), UUID()],
+                date: Date().addingTimeInterval(-172800), // 2 days ago
+                grossIncome: Decimal(100.0),
+                profit: Decimal(60.0),
+                payout: Decimal(40.0)
+            ),
+            GameSession(
+                id: UUID(),
+                modeID: UUID(),
+                startRange: 1,
+                endRange: 5,
+                repetitions: 2,
+                numWinners: 1,
+                playerIDs: [UUID(), UUID()],
+                winningNumbers: [2],
+                winnerIDs: [UUID()],
+                date: Date().addingTimeInterval(-259200), // 3 days ago
+                grossIncome: Decimal(10.0),
+                profit: Decimal(5.0),
+                payout: Decimal(5.0)
+            )
+        ]
+        
+        self.gameSessions = testSessions
+        self.isLoading = false
+        print("🧪 GameHistoryViewModel: Generated \(testSessions.count) test sessions")
     }
     
     func deleteGameSession(_ session: GameSession) {
@@ -125,7 +185,7 @@ class GameHistoryViewModel: ObservableObject {
         Task {
             let success = await storageManager.deleteGameSession(session)
             
-            await MainActor.run {
+                await MainActor.run {
                 if success {
                     self.gameSessions.removeAll { $0.id == session.id }
                     print("✅ Game session deleted successfully")
@@ -133,7 +193,7 @@ class GameHistoryViewModel: ObservableObject {
                     self.error = NSError(domain: "DeleteError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to delete game session"])
                     print("❌ Failed to delete game session")
                 }
-                self.isLoading = false
+                    self.isLoading = false
             }
         }
     }
