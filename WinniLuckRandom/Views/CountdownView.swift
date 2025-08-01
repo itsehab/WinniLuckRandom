@@ -32,75 +32,57 @@ struct CountdownView: View {
                             x: CGFloat.random(in: 0...geometry.size.width),
                             y: CGFloat.random(in: 0...geometry.size.height)
                         )
+                        .scaleEffect(pulseScale)
                         .animation(
-                            Animation.easeInOut(duration: Double.random(in: 2...4))
-                                .repeatForever(autoreverses: true)
-                                .delay(Double.random(in: 0...2)),
-                            value: countdownNumber
+                            .easeInOut(duration: Double.random(in: 1.5...3.0))
+                            .repeatForever(autoreverses: true)
+                            .delay(Double.random(in: 0...2.0)),
+                            value: pulseScale
                         )
                 }
                 
-                VStack(spacing: 40) {
-                    // Title
-                    Text("¡Preparate!")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 2)
-                        .scaleEffect(pulseScale)
-                        .animation(
-                            Animation.easeInOut(duration: 0.8)
-                                .repeatForever(autoreverses: true),
-                            value: pulseScale
-                        )
+                // Central countdown circle
+                VStack {
+                    Spacer()
                     
-                    // Main countdown number
                     ZStack {
                         // Outer glow ring
                         Circle()
                             .stroke(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.yellow.opacity(0.8),
-                                        Color.orange.opacity(0.6),
-                                        Color.red.opacity(0.4)
-                                    ]),
+                                    gradient: Gradient(colors: [.yellow, .orange]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 8
                             )
-                            .frame(width: 200, height: 200)
-                            .rotationEffect(.degrees(rotation))
+                            .frame(width: 160, height: 160)
                             .scaleEffect(scale * 1.1)
-                            .opacity(opacity * 0.7)
+                            .opacity(opacity * 0.6)
+                            .rotationEffect(.degrees(rotation))
                         
-                        // Main circle
+                        // Inner circle background
                         Circle()
                             .fill(
                                 RadialGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.yellow,
-                                        Color.orange,
-                                        Color.red.opacity(0.8)
-                                    ]),
-                                    center: .topLeading,
-                                    startRadius: 10,
-                                    endRadius: 100
+                                    gradient: Gradient(colors: [.orange.opacity(0.8), .red.opacity(0.6)]),
+                                    center: .center,
+                                    startRadius: 5,
+                                    endRadius: 70
                                 )
                             )
-                            .frame(width: 180, height: 180)
+                            .frame(width: 140, height: 140)
                             .scaleEffect(scale)
                             .opacity(opacity)
-                            .shadow(color: .orange.opacity(0.8), radius: 20, x: 0, y: 10)
                         
-                        // Inner circle
+                        // Inner ring
                         Circle()
                             .stroke(Color.white.opacity(0.9), lineWidth: 3)
                             .frame(width: 140, height: 140)
                             .scaleEffect(scale)
                             .opacity(opacity)
                         
-                        // Countdown number
+                        // Countdown number or Ya text
                         if countdownNumber > 0 {
                             Text("\(countdownNumber)")
                                 .font(.system(size: 80, weight: .heavy, design: .rounded))
@@ -110,79 +92,85 @@ struct CountdownView: View {
                                 .opacity(opacity)
                                 .rotationEffect(.degrees(rotation * 0.1))
                         } else {
-                            // "GO!" text
-                            Text("¡YA!")
+                            // "¡Ya!" text
+                            Text("¡Ya!")
                                 .font(.system(size: 60, weight: .heavy, design: .rounded))
                                 .foregroundColor(.white)
                                 .shadow(color: .black.opacity(0.8), radius: 3, x: 2, y: 2)
                                 .scaleEffect(scale)
                                 .opacity(opacity)
                         }
-                    }
-                    
-                    // Subtitle
-                    Text("El juego comenzará pronto...")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.9))
-                        .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 1)
-                        .opacity(opacity * 0.8)
-                }
-                
-                // Cancel button (top right)
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            // CRITICAL: Properly reset game state when canceled
-                            viewModel.hardReset()
-                            dismiss()
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 44, height: 44)
-                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                                
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
+                        
+                        // Inner sparkle effect
+                        ForEach(0..<8, id: \.self) { index in
+                            Circle()
+                                .fill(Color.white.opacity(0.8))
+                                .frame(width: 4, height: 4)
+                                .offset(
+                                    x: cos(Double(index) * .pi / 4) * 50,
+                                    y: sin(Double(index) * .pi / 4) * 50
+                                )
+                                .scaleEffect(scale)
+                                .opacity(opacity)
+                                .rotationEffect(.degrees(rotation * 2))
                         }
                     }
+                    .shadow(color: .orange.opacity(0.5), radius: 20, x: 0, y: 0)
+                    
                     Spacer()
+                    
+                    // Branding
+                    VStack(spacing: 8) {
+                        Text("WinniLuck")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 2, x: 1, y: 1)
+                        
+                        Text("Get Ready!")
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.6), radius: 1, x: 1, y: 1)
+                    }
+                    .padding(.bottom, 60)
+                    .scaleEffect(scale * 0.8)
+                    .opacity(opacity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 50)
             }
         }
         .onAppear {
+            print("⏰ CountdownView appeared - starting countdown")
+            // Set initial state
+            countdownNumber = 3
+            scale = 0.5
+            opacity = 0.0
+            
+            // Animate entrance
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                scale = 1.0
+                opacity = 1.0
+                pulseScale = 1.1
+            }
+            
+            // Start countdown sequence
             startCountdown()
         }
     }
     
     private func startCountdown() {
-        // Initial animation - show the number 3 first
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-            scale = 1.0
-            opacity = 1.0
-            pulseScale = 1.1
-        }
-        
+        print("🔢 Starting countdown from 3")
         // Start rotation animation
         withAnimation(.linear(duration: 15).repeatForever(autoreverses: false)) {
             rotation = 360
         }
         
-        // EXPLICIT COUNTDOWN SEQUENCE: 3 → 2 → 1 → ¡YA!
-        
-        // Step 1: Show "3" for 1.5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.animateToNumber2()
+        // Animate to number 2 after 1 second
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            animateToNumber2()
         }
     }
     
     private func animateToNumber2() {
-        print("🔢 Animating from 3 to 2")
+        print("🔢 Animating to 2")
         // Shrink animation
         withAnimation(.easeOut(duration: 0.3)) {
             scale = 0.6
@@ -204,16 +192,16 @@ struct CountdownView: View {
                     scale = 1.0
                 }
                 
-                // Show "2" for 1 second, then go to 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.animateToNumber1()
+                // Animate to number 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    animateToNumber1()
                 }
             }
         }
     }
     
     private func animateToNumber1() {
-        print("🔢 Animating from 2 to 1")
+        print("🔢 Animating to 1")
         // Shrink animation
         withAnimation(.easeOut(duration: 0.3)) {
             scale = 0.6
@@ -235,23 +223,23 @@ struct CountdownView: View {
                     scale = 1.0
                 }
                 
-                // Show "1" for 1 second, then go to ¡YA!
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.animateToGo()
+                // Show "GO!" and start game
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showGoAndStartGame()
                 }
             }
         }
     }
     
-    private func animateToGo() {
-        print("🔢 Animating from 1 to ¡YA!")
+    private func showGoAndStartGame() {
+        print("🔢 Showing ¡Ya! and starting game")
         // Shrink animation
         withAnimation(.easeOut(duration: 0.3)) {
             scale = 0.6
             opacity = 0.4
         }
         
-        // Change to ¡YA! and grow
+        // Change to "¡Ya!" and grow
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             countdownNumber = 0
             
@@ -260,38 +248,23 @@ struct CountdownView: View {
                 opacity = 1.0
             }
             
-            // Settle and wait
+            // Final burst animation
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    scale = 1.0
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    scale = 1.5
+                    opacity = 1.0
+                    rotation += 180
                 }
                 
-                // Show "¡YA!" for 1 second, then start game
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.showGoAndStartGame()
+                // Start game after animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("🎮 Starting game after countdown")
+                    viewModel.startGameAfterCountdown()
+                    viewModel.showingCountdown = false
+                    viewModel.showingResult = true
+                    dismiss()
                 }
             }
-        }
-    }
-    
-    private func showGoAndStartGame() {
-        // Final "¡YA!" animation
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
-            scale = 1.8
-            rotation += 180
-        }
-        
-        // Start the actual game after showing "¡YA!"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            print("🕰️ COUNTDOWN FINISHED - About to call startGameAfterCountdown()")
-            print("🕰️ ViewModel exists: \(viewModel != nil)")
-            print("🕰️ Current players count: \(viewModel.currentPlayers.count)")
-            print("🕰️ Current game mode: \(viewModel.currentGameMode?.title ?? "nil")")
-            
-            viewModel.startGameAfterCountdown()
-            
-            print("🕰️ startGameAfterCountdown() call completed, dismissing countdown")
-            dismiss()
         }
     }
 }
@@ -300,4 +273,4 @@ struct CountdownView: View {
     let viewModel = RandomNumberViewModel()
     let settings = SettingsModel()
     return CountdownView(viewModel: viewModel, settings: settings)
-} 
+}

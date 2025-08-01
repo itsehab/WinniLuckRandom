@@ -153,6 +153,7 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $viewModel.showingCountdown) {
             CountdownView(viewModel: viewModel, settings: settings)
         }
+
         .alert(isPresented: $showingAlert) {
             Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
         }
@@ -832,6 +833,11 @@ struct HomeView: View {
         viewModel.currentGameSession = gameSession
         viewModel.currentPlayers = players
         viewModel.currentGameMode = selectedGameMode // CRITICAL: Set the game mode for validation
+        
+        // Show countdown UI first
+        viewModel.showingCountdown = true
+        
+        // Start the game with countdown
         viewModel.generateRandomNumbers()
     }
     
@@ -841,6 +847,8 @@ struct HomeView: View {
         viewModel.currentNumber = 0
         viewModel.isGenerating = false
     }
+    
+
 }
 
 // MARK: - Background View

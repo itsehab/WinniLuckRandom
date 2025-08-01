@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 
+@MainActor
 class RandomNumberViewModel: ObservableObject {
     @Published var startNumber: String = "1"
     @Published var endNumber: String = "100"
@@ -24,16 +25,17 @@ class RandomNumberViewModel: ObservableObject {
     @Published var showingCountdown = false // Add countdown state
     @Published var isNewGameStarting = false
     @Published var isCompletingRace = false
-    @Published var gameIsReady = false // NEW: Signal when game is ready for timer
+    @Published var gameIsReady = false
     @Published var totalNumbersToGenerate: Int = 0
     @Published var rangeSize: Int = 0
     @Published var currentGameMode: GameMode?
     @Published var currentGameSession: GameSession?
     @Published var currentPlayers: [Player] = []
     @Published var gameWinners: [WinnerData] = []
-    @Published var confirmedNumbersCount: Int = 0 // NEW: Track actual announced numbers for progress bar
+    @Published var confirmedNumbersCount: Int = 0 // Track actual announced numbers for progress bar
     @Published var numberCounts: [Int: Int] = [:] // Track current count for each number (shown on progress bar)
     private var pendingNumber: Int? = nil // Number waiting to be announced by voice
+    var pendingNumberExists: Bool { pendingNumber != nil }
     
     // Debugging access
     var currentIndex: Int { _currentIndex }
@@ -79,25 +81,13 @@ class RandomNumberViewModel: ObservableObject {
               let start = Int(startNumber),
               let end = Int(endNumber),
               let reps = Int(repetitions),
-              let winners = Int(winnersCount) else {
+              let _ = Int(winnersCount) else {
             return ""
         }
         
         let range = end - start + 1
         let total = range * reps
-        return String(format: NSLocalizedString("generation_preview_with_winners", comment: "Range: %d numbers × %d repetitions = %d total numbers, %d winners"), range, reps, total, winners)
-    }
-    
-    var finalNumbersWithCounts: [(number: Int, count: Int)] {
-        guard let winners = Int(winnersCount) else { return [] }
-        
-        // Winners are numbers that reached the target repetition count, in order of achievement
-        let winnerNumbers = Array(winnerOrder.prefix(winners))
-        
-        return winnerNumbers.map { number in
-            let finalCount = numberCounts[number] ?? 0
-            return (number: number, count: finalCount)
-        }
+        return "\(range) numbers × \(reps) repetitions = \(total) total numbers"
     }
     
     func generateRandomNumbers() {
@@ -105,183 +95,186 @@ class RandomNumberViewModel: ObservableObject {
         print("📊 Validation check:")
         print("  - Current players: \(currentPlayers.count)")
         print("  - Current game mode: \(currentGameMode?.title ?? "nil")")
-        print("  - Old inputsValid: \(inputsValid)")
         
-        // NEW: Use game mode validation instead of old input validation
-        guard !currentPlayers.isEmpty, let gameMode = currentGameMode else {
+        // Validate that we have players and game mode
+        guard !currentPlayers.isEmpty, currentGameMode != nil else {
             print("❌ ERROR: Missing players or game mode - cannot start countdown")
             return
         }
         
-        print("✅ Game mode validation passed - showing countdown")
-        // Show countdown first instead of immediately starting
+        print("✅ Game mode validation passed - showing countdown then starting game")
+        
+        // Show countdown UI first
         showingCountdown = true
     }
     
     func startGameAfterCountdown() {
-        print("🚀🚀🚀 FUNCTION CALLED: startGameAfterCountdown() 🚀🚀🚀")
-        print("🚀 STARTING GAME AFTER COUNTDOWN")
-        print("📊 Current state check:")
-        print("  - Current players: \(currentPlayers.count)")
-        print("  - Current game mode: \(currentGameMode?.title ?? "nil")")
-        print("  - Winners required: \(currentGameMode?.maxWinners ?? 0)")
-        print("  - Repetitions required: \(currentGameMode?.repetitions ?? 0)")
-        
-        guard !currentPlayers.isEmpty, let gameMode = currentGameMode else {
-            print("❌ ERROR: Missing players or game mode for generation")
-            return
-        }
-        
-        print("🎮 Initializing game generation...")
-        isGenerating = true
-        
-        // Get the range of selected numbers from players
-        let selectedNumbers = currentPlayers.compactMap { $0.selectedNumber }
-        let start = selectedNumbers.min() ?? 1
-        let end = selectedNumbers.max() ?? 10
-        let reps = gameMode.repetitions
-        
+        print("🎮 startGameAfterCountdown() CALLED")
         print("📊 Game parameters:")
-        print("  - Range: \(start) to \(end)")
-        print("  - Repetitions: \(reps)")
         print("  - Players: \(currentPlayers.count)")
+        print("  - Game mode: \(currentGameMode?.title ?? "nil")")
         
-        // Clear any previous game state
+        // Reset game state
+        _currentIndex = 0
+        _generatedNumbers.removeAll()
         liveGameNumbers.removeAll()
         winnerOrder.removeAll()
         numberCounts.removeAll()
-        gameWinners.removeAll()
-        _currentIndex = 0
         currentNumber = 0
-        pendingNumber = nil
-        confirmedNumbersCount = 0
-        isCompletingRace = false
-        
-        print("🧹 Cleared previous game state")
-        
-        // Calculate range size and total numbers to generate
-        rangeSize = end - start + 1
-        
-        // Generate balanced numbers with fair distribution
-        _generatedNumbers = generateBalancedNumbers(start: start, end: end, repetitions: reps)
-        
-        // IMPORTANT: Set totalRepetitions to actual generated count, not theoretical maximum
-        totalNumbersToGenerate = _generatedNumbers.count
-        totalRepetitions = _generatedNumbers.count
         currentRepetition = 0
         confirmedNumbersCount = 0
+        pendingNumber = nil
         
-        print("🎯 Generated \(generatedNumbers.count) total calls")
-        print("🎯 First 10 numbers: \(Array(generatedNumbers.prefix(10)))")
-        print("🎯 Generated numbers array: \(generatedNumbers)")
-        print("🎯 Selected numbers from players: \(selectedNumbers)")
-        print("🎯 Range start: \(start), end: \(end)")
+        // Get range from game mode or players
+        let selectedNumbers = currentPlayers.compactMap { $0.selectedNumber }
+        let start = selectedNumbers.min() ?? 1
+        let end = selectedNumbers.max() ?? 100
+        let repetitions = currentGameMode?.repetitions ?? 1
         
-        // Check initial state before starting
-        let requiredWinners = gameMode.maxWinners
-        let targetReps = getTargetRepetitions()
-        print("🎯 Target reps: \(targetReps), Required winners: \(requiredWinners)")
+        print("📊 Range: \(start)-\(end), Repetitions: \(repetitions)")
         
-        let initialCheck = shouldStopGame()
-        print("🚨 Initial shouldStopGame check: \(initialCheck)")
+        // Generate balanced numbers
+        _generatedNumbers = generateBalancedNumbers(start: start, end: end, repetitions: repetitions)
+        totalRepetitions = _generatedNumbers.count
         
-        if initialCheck {
-            print("❌ CRITICAL: Game wants to stop IMMEDIATELY! This is a bug!")
-            print("📊 Debug state:")
-            print("  - winnerOrder: \(winnerOrder)")
-            print("  - numberCounts: \(numberCounts)")
-            print("  - currentRepetition: \(currentRepetition)")
-            print("  - winnersAtFinishLine count: \(winnerOrder.filter { numberCounts[$0] ?? 0 >= targetReps }.count)")
+        print("🎲 Generated \(_generatedNumbers.count) total numbers")
+        print("🎲 First 10 numbers: \(Array(_generatedNumbers.prefix(10)))")
+        
+        // Mark game as ready to start
+        gameIsReady = true
+    }
+    
+    private func generateBalancedNumbers(start: Int, end: Int, repetitions: Int) -> [Int] {
+        func hasConsecutiveDuplicates(_ array: [Int]) -> Bool {
+            for i in 0..<(array.count - 1) where array[i] == array[i + 1] {
+                return true
+            }
+            return false
         }
-        
-        // Show first number and set it as pending (will be tracked after voice speaks)
-        if !_generatedNumbers.isEmpty {
-            print("🎯 Setting first number from generatedNumbers[0]: \(_generatedNumbers[0])")
-            currentNumber = _generatedNumbers[0]
-            currentRepetition = 1
-            
-            // IMPORTANT: Set as pending instead of immediate tracking
-            pendingNumber = currentNumber
-            print("🔥 CRITICAL: pendingNumber set to \(pendingNumber ?? -999)")
-            print("🔥 CRITICAL: currentNumber is \(currentNumber)")
-            
-            print("🎲 Starting with number: \(currentNumber)")
-            print("🎲 Pending number: \(pendingNumber ?? -999)")
-            print("🎲 hasNextNumber: \(hasNextNumber)")
-            
-            // Close countdown and show result
-            showingCountdown = false
-            showingResult = true
-            
-            // IMPORTANT: Signal that game is ready for timer to start
-            gameIsReady = true
-            print("✅ GAME READY - Timer can now start")
-        } else {
-            print("❌ CRITICAL ERROR: Generated numbers array is EMPTY!")
-            print("❌ Debug info:")
-            print("  - Start: \(start), End: \(end), Reps: \(reps)")
-            print("  - Selected numbers: \(selectedNumbers)")
-            print("  - Players: \(currentPlayers.map { "[\($0.firstName): \($0.selectedNumber ?? -1)]" })")
-            gameIsReady = false
+        // Create a pool where every number appears exactly `repetitions` times
+        var pool: [Int] = []
+        for num in start...end {
+            pool.append(contentsOf: Array(repeating: num, count: repetitions))
         }
-        
-        isGenerating = false
-        print("🚀 GAME GENERATION COMPLETE")
+        // Shuffle until no consecutive duplicates
+        var shuffled = pool.shuffled()
+        var safety = 0
+        while hasConsecutiveDuplicates(shuffled) && safety < 1000 {
+            shuffled.shuffle()
+            safety += 1
+        }
+        return shuffled
+    }
+    
+    func startNewGame() {
+        print("🔄 Starting new game")
+        isNewGameStarting = true
+        reset()
+    }
+    
+    func goHome() {
+        print("🏠 Going home")
+        reset()
     }
     
     func nextNumber() {
-        print("🎯 nextNumber() CALLED")
+        print("🎲 nextNumber() CALLED")
         print("  - Current index: \(_currentIndex)")
         print("  - Generated numbers count: \(_generatedNumbers.count)")
-        print("  - hasNextNumber: \(hasNextNumber)")
         
-        guard hasNextNumber else {
-            print("❌ No next number available - finalizing game")
-            finalizeGame()
+        guard _currentIndex < _generatedNumbers.count else {
+            print("❌ No more numbers available")
             return
         }
         
-        _currentIndex += 1
-        currentNumber = _generatedNumbers[_currentIndex]
+        let nextNumber = _generatedNumbers[_currentIndex]
+        print("🎲 Next number: \(nextNumber)")
+        
+        // Set as pending until voice announces it
+        pendingNumber = nextNumber
+        currentNumber = nextNumber
         currentRepetition = _currentIndex + 1
         
-        print("  - NEW current index: \(_currentIndex)")
-        print("  - NEW current number: \(currentNumber)")
-        print("  - NEW current repetition: \(currentRepetition)")
+        // Track live game numbers
+        liveGameNumbers.append(nextNumber)
         
-        // IMPORTANT: Don't track immediately - wait for voice confirmation
-        pendingNumber = currentNumber
-        print("🎯 Number \(currentNumber) is now PENDING voice announcement")
+        // Advance index for next call
+        _currentIndex += 1
         
-        // Note: trackLiveNumber() will be called AFTER voice speaks via confirmPendingNumber()
+        print("🎲 Updated state:")
+        print("  - Pending number: \(pendingNumber ?? -1)")
+        print("  - Current number: \(currentNumber)")
+        print("  - Current repetition: \(currentRepetition)")
     }
     
-    // Call this function AFTER the voice has spoken the number
     func confirmPendingNumber() {
-        print("🔥 Confirming number: \(currentNumber)")
-        print("🔥 Confirmed count: \(confirmedNumbersCount) -> \(confirmedNumbersCount + 1)")
-        
-        // ALWAYS use currentNumber - this is the number that should be confirmed
-        let numberToConfirm = currentNumber
-        
-        guard numberToConfirm > 0 else { 
-            print("⚠️ ERROR: No valid number to confirm (currentNumber is 0)")
+        print("🎯 confirmPendingNumber() CALLED")
+        guard let number = pendingNumber else {
+            print("❌ No pending number to confirm")
             return 
         }
         
-        // Clear pendingNumber since we're confirming currentNumber
-        if pendingNumber != nil && pendingNumber != currentNumber {
-            print("⚠️ WARNING: pendingNumber (\(pendingNumber!)) differs from currentNumber (\(currentNumber))")
-        }
+        // Update counts and check for winners
+        trackLiveNumber(number)
         
-        // Increment confirmed numbers count for progress bar
+        // Clear pending state
+        pendingNumber = nil
         confirmedNumbersCount += 1
         
-        // Now track the number on progress bar since voice has announced it
-        trackLiveNumber(numberToConfirm)
-        pendingNumber = nil
+        print("✅ Confirmed number \(number)")
+        print("  - Current counts: \(numberCounts)")
+        print("  - Winners order: \(winnerOrder)")
+    }
+    
+    private func trackLiveNumber(_ number: Int) {
+        // Update count for this number
+        numberCounts[number, default: 0] += 1
         
-        print("✅ Number \(numberToConfirm) confirmed (\(confirmedNumbersCount)/\(totalRepetitions))")
+        // Check if this number just reached target repetitions
+        let targetReps = currentGameMode?.repetitions ?? 1
+        let finalCount = numberCounts[number] ?? 0
+        
+        if finalCount == targetReps {
+            print("🏆 Number \(number) reached target repetitions!")
+            // Add to winners list if not already there
+            if !winnerOrder.contains(number) {
+                winnerOrder.append(number)
+                
+                // Create winner data
+                if let player = currentPlayers.first(where: { $0.selectedNumber == number }) {
+                    let winnerData = WinnerData(
+                        player: player,
+                        number: number,
+                        finalCount: finalCount
+                    )
+                    gameWinners.append(winnerData)
+                }
+            }
+        }
+    }
+    
+    func shouldStopGame() -> Bool {
+        print("🎮 Checking if game should stop")
+        print("  - Winners: \(winnerOrder.count)")
+        print("  - Target winners: \(currentGameMode?.maxWinners ?? 1)")
+        
+        // Get required winners from game mode
+        let targetWinners = currentGameMode?.maxWinners ?? 1
+        let shouldStop = winnerOrder.count >= targetWinners
+        
+        if shouldStop {
+            print("🏁 Game should stop - sufficient winners reached")
+        } else {
+            print("🎮 Game continues - need more winners")
+        }
+        
+        return shouldStop
+    }
+    
+    func finalizeGame() {
+        print("🏁 Finalizing game")
+        showingWinners = true
+        isCompletingRace = true
     }
     
     func reset() {
@@ -311,274 +304,22 @@ class RandomNumberViewModel: ObservableObject {
         showingWinners = false
         showingCountdown = false
         isNewGameStarting = false
-        gameIsReady = false // Reset timer ready state
+        gameIsReady = false
         
         // Clear game session data but keep players for potential restart
         
         print("🔄 Game state completely reset")
     }
     
-    func hardReset() {
-        // Complete reset including players and game session
-        reset()
-        currentPlayers.removeAll()
-        currentGameMode = nil
-        currentGameSession = nil
-        
-        print("🔄 Complete hard reset performed")
-    }
-    
-    func goHome() {
-        reset()
-    }
-    
-    // MARK: - Public Helper Methods
-    
     func getTargetRepetitions() -> Int {
-        return currentGameMode?.repetitions ?? Int(repetitions) ?? 1
+        return currentGameMode?.repetitions ?? 1
     }
     
-    func setPendingNumber(_ number: Int) {
-        pendingNumber = number
-        print("🔥 setPendingNumber called with \(number) - pendingNumber is now: \(pendingNumber ?? -999)")
-    }
-    
-    // MARK: - Private Helper Methods
-    
-    private func generateBalancedNumbers(start: Int, end: Int, repetitions: Int) -> [Int] {
-        print("🔢 generateBalancedNumbers() CALLED")
-        print("  - Start: \(start), End: \(end), Repetitions: \(repetitions)")
-        
-        let range = Array(start...end)
-        let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
-        
-        print("  - Range: \(range)")
-        print("  - Required winners: \(requiredWinners)")
-        
-        // Calculate total calls needed
-        let totalCallsNeeded = range.count * repetitions
-        print("  - Total calls needed: \(totalCallsNeeded)")
-        
-        // Prepare arrays for different phases
-        var allNumbers: [Int] = []
-        
-        // Choose winners randomly
-        let winners = Array(range.shuffled().prefix(requiredWinners))
-        let nonWinners = range.filter { !winners.contains($0) }
-        
-        print("  - Winners: \(winners)")
-        print("  - Non-winners: \(nonWinners)")
-        
-        // PHASE 1: Introduction round - all numbers appear once
-        let introductionRound = range.shuffled()
-        allNumbers.append(contentsOf: introductionRound)
-        print("  - Introduction round: \(introductionRound)")
-        
-        // PHASE 2: Competition round
-        var competitionNumbers: [Int] = []
-        
-        // Winners get additional calls to reach target repetitions
-        for winner in winners {
-            let additionalCalls = repetitions - 1 // -1 because they already appeared once in introduction
-            for _ in 0..<additionalCalls {
-                competitionNumbers.append(winner)
-            }
-        }
-        
-        // Non-winners get limited additional calls (but not enough to win)
-        let maxCallsForNonWinners = max(0, repetitions - 2)  // Ensure they can't accidentally win
-        let remainingCalls = totalCallsNeeded - allNumbers.count - competitionNumbers.count
-        
-        print("  - Competition numbers for winners: \(competitionNumbers)")
-        print("  - Max calls for non-winners: \(maxCallsForNonWinners)")
-        print("  - Remaining calls: \(remainingCalls)")
-        
-        if remainingCalls > 0 && maxCallsForNonWinners > 0 {
-            for _ in 0..<remainingCalls {
-                if let randomNonWinner = nonWinners.randomElement() {
-                    competitionNumbers.append(randomNonWinner)
-                }
-            }
-        }
-        
-        // Shuffle competition numbers and add basic duplicate prevention
-        competitionNumbers.shuffle()
-        
-        // Basic consecutive duplicate removal
-        for i in 1..<competitionNumbers.count {
-            if competitionNumbers[i] == competitionNumbers[i-1] {
-                // Try to swap with a different number nearby
-                for j in stride(from: i+1, to: min(i+5, competitionNumbers.count), by: 1) {
-                    if competitionNumbers[j] != competitionNumbers[i] {
-                        competitionNumbers.swapAt(i, j)
-                        break
-                    }
-                }
-            }
-        }
-        
-        allNumbers.append(contentsOf: competitionNumbers)
-        
-        print("  - Final sequence length: \(allNumbers.count)")
-        print("  - Final sequence preview: \(Array(allNumbers.prefix(20)))")
-        
-        return allNumbers
-    }
-    
-    private func trackLiveNumber(_ number: Int) {
-        let targetReps = getTargetRepetitions()
-        let currentCount = numberCounts[number, default: 0]
-        
-        if currentCount >= targetReps { 
-            print("📊 Number \(number) already at target - skipping")
-            return 
-        }
-        
-        numberCounts[number] = currentCount + 1
-        let newCount = numberCounts[number]!
-        print("📊 Number \(number): \(currentCount) -> \(newCount)/\(targetReps)")
-        
-        // Track in order for position calculation
-        if !liveGameNumbers.contains(number) {
-            liveGameNumbers.append(number)
-        }
-        
-        // Check if this number has reached the target and becomes a winner
-        if newCount >= targetReps {
-            if !winnerOrder.contains(number) {
-                winnerOrder.append(number)
-                print("🏆 NEW WINNER! Number \(number) reached finish line! (\(winnerOrder.count) total winners)")
-            }
-        }
-    }
-    
-    func shouldStopGame() -> Bool {
-        // Get the required number of winners from the game mode
-        let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
-        let targetReps = getTargetRepetitions()
-        
-        // Check if we have enough winners who have reached the finish line (target repetitions)
-        let winnersAtFinishLine = winnerOrder.filter { number in
-            let count = numberCounts[number] ?? 0
-            return count >= targetReps
-        }
-        
-        print("🏁 Game check: \(winnersAtFinishLine.count)/\(requiredWinners) winners at finish line")
-        
-        // PRIMARY CONDITION: Stop ONLY when we have EXACTLY the required number of winners
-        if winnersAtFinishLine.count >= requiredWinners {
-            isCompletingRace = true
-            print("🏁 GAME OVER: All \(requiredWinners) required winners achieved!")
-            return true
-        }
-        
-        // SAFETY CONDITION: Only check sequence completion in extreme cases
-        if currentRepetition > 0 {
-            let hasUsedAllNumbers = _currentIndex >= _generatedNumbers.count - 1
-            if hasUsedAllNumbers {
-                print("⚠️ SEQUENCE COMPLETE: Only \(winnersAtFinishLine.count)/\(requiredWinners) winners achieved")
-                
-                if winnersAtFinishLine.count > 0 {
-                    isCompletingRace = true
-                    return true
-                } else {
-                    return false
-                }
-            }
-        }
-        
-        return false
-    }
-
-    
-    func finalizeGame() {
-        print("🎉 GAME FINALIZED - \(winnerOrder.count) winners achieved")
-        
-        // Generate winner data
-        gameWinners = generateWinnerData()
-        
-        // Save the completed game session with final results
-        saveCompletedGameSession()
-        
-        // Show winners screen
-        showingWinners = true
-        showingCongrats = false
-    }
-    
-    private func saveCompletedGameSession() {
-        guard let gameMode = currentGameMode else {
-            print("❌ Cannot save game session: No game mode")
-            return
-        }
-        
-        // Get final winning numbers and winner player IDs
-        let requiredWinners = gameMode.maxWinners
-        let finalWinningNumbers = Array(winnerOrder.prefix(requiredWinners))
-        let winnerPlayerIDs = finalWinningNumbers.compactMap { number in
-            currentPlayers.first(where: { $0.selectedNumber == number })?.id
-        }
-        
-        // Calculate final financial data
-        let playerCount = currentPlayers.count
-        let grossIncome = gameMode.calculateGross(for: playerCount)
-        let actualWinners = winnerPlayerIDs.count
-        let payout = gameMode.calculatePayout(for: actualWinners)
-        let profit = gameMode.calculateProfit(for: playerCount, winners: actualWinners)
-        
-        // Create the final game session with complete data
-        let completedSession = GameSession(
-            id: currentGameSession?.id ?? UUID(), // Preserve original ID if exists
-            modeID: gameMode.id,
-            startRange: 1,
-            endRange: gameMode.maxPlayers,
-            repetitions: gameMode.repetitions,
-            numWinners: actualWinners,
-            playerIDs: currentPlayers.map { $0.id },
-            winningNumbers: finalWinningNumbers,
-            winnerIDs: winnerPlayerIDs,
-            date: currentGameSession?.date ?? Date(), // Preserve original date
-            grossIncome: grossIncome,
-            profit: profit,
-            payout: payout
-        )
-        
-        // Save to storage
-        Task {
-            let success = await StorageManager.shared.saveGameSession(completedSession)
-            if success {
-                print("✅ Game session saved successfully: \(completedSession.id)")
-                print("📊 Final results: \(actualWinners) winners, profit: \(profit), gross: \(grossIncome)")
-            } else {
-                print("❌ Failed to save game session")
-            }
-        }
-    }
-    
-    func generateWinnerData() -> [WinnerData] {
-        let requiredWinners = currentGameMode?.maxWinners ?? Int(winnersCount) ?? 1
-        let winnerNumbers = Array(winnerOrder.prefix(requiredWinners))
-        
-        return winnerNumbers.compactMap { number in
-            // Find the player with this number
-            if let player = currentPlayers.first(where: { $0.selectedNumber == number }) {
+    func getWinnerData(for number: Int) -> (number: Int, count: Int)? {
+        if numberCounts[number] != nil {
                 let finalCount = numberCounts[number] ?? 0
-                return WinnerData(
-                    player: player,
-                    number: number,
-                    finalCount: finalCount
-                )
+            return (number: number, count: finalCount)
             }
             return nil
-        }
-    }
-    
-    func startNewGame() {
-        // Reset game state but keep current players
-        let playersToKeep = currentPlayers
-        reset()
-        currentPlayers = playersToKeep
-        
-        // Generate new numbers
-        generateRandomNumbers()
     }
 } 
